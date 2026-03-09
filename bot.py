@@ -573,7 +573,7 @@ try:
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-  import requests
+import requests
 
     asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -596,6 +596,7 @@ except RuntimeError:
 
 if __name__ == "__main__":
     main()
+
 
 
 
