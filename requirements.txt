@@ -6,7 +6,6 @@ charset-normalizer==3.4.5
 google-api-core==2.30.0
 google-api-python-client==2.137.0
 google-auth==2.33.0
-google-auth-httplib2==0.3.0
 googleapis-common-protos==1.73.0
 h11==0.16.0
 httpcore==1.0.9
@@ -31,3 +30,4 @@ python-telegram-bot[job-queue]==21.6
 google-api-python-client==2.137.0
 google-auth==2.33.0
 google-auth-httplib2==0.2.0
+
