@@ -441,9 +441,6 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
    if data.startswith("rem:time:"):
-        t = data.split(":")[-1]
-        context.user_data[MODE] = "REMIND_TEXT"
-        context.user_data[TMP] = {"delay": t}
         context.user_data[MODE] = "REMIND_DATETIME"
         await q.message.reply_text(
         "Введи дату и время в формате:\n\n"
@@ -573,6 +570,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
