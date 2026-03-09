@@ -558,6 +558,12 @@ def main():
     )
 
     app.run_polling()
+print("BOOT: bottom reached", flush=True)
+
+if __name__ == "__main__":
+    print("BOOT: entering main()", flush=True)
+    main()
+    print("BOOT: main started", flush=True)
 
 
 
