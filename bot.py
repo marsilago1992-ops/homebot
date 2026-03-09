@@ -567,9 +567,9 @@ def main():
     print("Bot is running. Open Telegram and send /start")
     import asyncio
 
-    try:
+try:
     asyncio.get_event_loop()
-    except RuntimeError:
+except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     import requests
@@ -580,6 +580,7 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
 
 
