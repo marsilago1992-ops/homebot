@@ -9,6 +9,14 @@ if not SPREADSHEET_ID:
     raise RuntimeError("Missing env var SPREADSHEET_ID")
 import re
 import logging
+
+print("BOT BUILD MARKER: LOOP_FIX_V1", flush=True)
+
+import asyncio
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 
@@ -569,6 +577,7 @@ except RuntimeError:
 if __name__ == "__main__":
 
     main()
+
 
 
 
