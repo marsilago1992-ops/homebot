@@ -567,20 +567,20 @@ def main():
     print("Bot is running. Open Telegram and send /start")
     import asyncio
 
-try:
+    try:
     asyncio.get_event_loop()
-except RuntimeError:
+    except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     import requests
-print("DELETE WEBHOOK:", requests.get(
-    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true"
-).text, flush=True)
+    print("DELETE WEBHOOK:", requests.get(
+    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true").text, flush=True)
     app.run_polling()
 
 if __name__ == "__main__":
 
     main()
+
 
 
 
