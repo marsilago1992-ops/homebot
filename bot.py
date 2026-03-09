@@ -534,46 +534,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logging.exception("Exception while handling an update:", exc_info=context.error)
 
 def main():
-    if "PASTE_" in TELEGRAM_BOT_TOKEN:
-        raise ValueError("Заполни TELEGRAM_BOT_TOKEN в bot.py")
-    if "PASTE_" in SPREADSHEET_ID:
-        raise ValueError("Заполни SPREADSHEET_ID в bot.py")
-
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-
-    # команды остаются как резерв
-    app.add_handler(CommandHandler("buy", buy))
-    app.add_handler(CommandHandler("list", list_shopping))
-    app.add_handler(CommandHandler("done", done_shopping))
-
-    app.add_handler(CommandHandler("pickup", pickup))
-    app.add_handler(CommandHandler("pickups", pickups))
-    app.add_handler(CommandHandler("picked", picked))
-
-    app.add_handler(CommandHandler("movie", movie))
-    app.add_handler(CommandHandler("movies", movies))
-    app.add_handler(CommandHandler("choose", choose_movie))
-
-    app.add_handler(CommandHandler("remind", remind))
-
-    # кнопки + текст после кнопок
-    app.add_handler(CallbackQueryHandler(on_buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-
-    app.add_error_handler(error_handler)
-
-    print("Bot is running. Open Telegram and send /start")
     import asyncio
-
-try:
-    
-    asyncio.get_event_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-import requests
+    import requests
 
     asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -596,6 +558,7 @@ import requests
 
 if __name__ == "__main__":
     main()
+
 
 
 
