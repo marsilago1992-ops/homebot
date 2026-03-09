@@ -440,15 +440,15 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Выбери время:", reply_markup=remind_time_kb())
         return
 
-   if data.startswith("rem:time:"):
+    if data.startswith("rem:time:"):
         context.user_data[MODE] = "REMIND_DATETIME"
         await q.message.reply_text(
-        "Введи дату и время в формате:\n\n"
-        "ДД.ММ.ГГГГ ЧЧ:ММ\n\n"
-        "Пример:\n"
-        "08.03.2026 19:30",
-        reply_markup=back_kb()
-        await q.message.reply_text("Ок. Теперь напиши текст напоминания.", reply_markup=back_kb())
+            "Введи дату и время в формате:\n\n"
+            "ДД.ММ.ГГГГ ЧЧ:ММ\n\n"
+            "Пример:\n"
+            "08.03.2026 19:30",
+            reply_markup=back_kb()
+        )
         return
 
     await q.message.reply_text("Не понял кнопку. Нажми /start", reply_markup=main_menu_kb())
@@ -496,6 +496,26 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sheet_append(SHEETS["pickups"], [[now_str(), marketplace, point, deadline, item, "OPEN", by]])
         context.user_data.clear()
         await reply(update, f"📦 Добавил: {marketplace}, до {deadline}: {item}", reply_markup=pickups_kb())
+        return
+if mode == "REMIND_DATETIME":
+        try:
+            dt = datetime.strptime(text, "%d.%m.%Y %H:%M")
+        except ValueError:
+            await reply(
+                update,
+                "Неверный формат.\nИспользуй: ДД.ММ.ГГГГ ЧЧ:ММ\nПример: 08.03.2026 19:30",
+                reply_markup=back_kb()
+            )
+            return
+
+        if dt <= datetime.now():
+            await reply(update, "Это время уже прошло.", reply_markup=back_kb())
+            return
+
+        context.user_data[MODE] = "REMIND_TEXT"
+        context.user_data[TMP] = {"datetime": dt}
+
+        await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
         return
 
     if mode == "REMIND_TEXT":
@@ -570,6 +590,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
