@@ -572,11 +572,16 @@ try:
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    import requests
+print("DELETE WEBHOOK:", requests.get(
+    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true"
+).text, flush=True)
     app.run_polling()
 
 if __name__ == "__main__":
 
     main()
+
 
 
 
