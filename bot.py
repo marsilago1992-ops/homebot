@@ -557,11 +557,19 @@ def main():
     app.add_error_handler(error_handler)
 
     print("Bot is running. Open Telegram and send /start")
+    import asyncio
+
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     app.run_polling()
 
 if __name__ == "__main__":
 
     main()
+
 
 
 
