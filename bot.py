@@ -151,6 +151,8 @@ def remind_time_kb():
         [InlineKeyboardButton("1 час", callback_data="rem:time:1h"),
          InlineKeyboardButton("2 часа", callback_data="rem:time:2h")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="menu:remind")],
+        [InlineKeyboardButton("📅 Ввести дату и время", callback_data="rem:time:custom")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu:remind")],
     ])
 
 # ====== PARSERS ======
@@ -438,10 +440,17 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Выбери время:", reply_markup=remind_time_kb())
         return
 
-    if data.startswith("rem:time:"):
+   if data.startswith("rem:time:"):
         t = data.split(":")[-1]
         context.user_data[MODE] = "REMIND_TEXT"
         context.user_data[TMP] = {"delay": t}
+        context.user_data[MODE] = "REMIND_DATETIME"
+        await q.message.reply_text(
+        "Введи дату и время в формате:\n\n"
+        "ДД.ММ.ГГГГ ЧЧ:ММ\n\n"
+        "Пример:\n"
+        "08.03.2026 19:30",
+        reply_markup=back_kb()
         await q.message.reply_text("Ок. Теперь напиши текст напоминания.", reply_markup=back_kb())
         return
 
@@ -564,6 +573,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
