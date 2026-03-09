@@ -497,7 +497,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         await reply(update, f"📦 Добавил: {marketplace}, до {deadline}: {item}", reply_markup=pickups_kb())
         return
-if mode == "REMIND_DATETIME":
+    if mode == "REMIND_DATETIME":
         try:
             dt = datetime.strptime(text, "%d.%m.%Y %H:%M")
         except ValueError:
@@ -590,6 +590,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
