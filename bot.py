@@ -28,8 +28,6 @@ from googleapiclient.discovery import build
 logging.basicConfig(level=logging.INFO)
 
 # ====== НАСТРОЙКИ (ЗАПОЛНИ) ======
-TELEGRAM_BOT_TOKEN = os.getenv("8504504266:AAH56VQ_zynjVWiJ-GGOJpfFjJUVyXNHQYE")
-SPREADSHEET_ID = os.getenv("1_3gWF-oW_sw2X7--t5S2BC5vjYIMThZuCDnDaRgLYjk")
 SERVICE_ACCOUNT_FILE = "service_account.json"  # C:\Users\ASUS\Desktop\Homebot
 
 SHEETS = {
@@ -564,6 +562,7 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
 
 
