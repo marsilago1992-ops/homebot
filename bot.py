@@ -393,7 +393,7 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "menu:remind":
-        context.user_data.clear()
+        context.user_data.pop(MODE, None)
         await q.message.reply_text("⏰ Напоминания:", reply_markup=remind_kb())
         return
 
@@ -590,6 +590,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
