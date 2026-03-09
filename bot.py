@@ -541,7 +541,14 @@ def main():
 
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
+    # Команды
     app.add_handler(CommandHandler("start", start))
+
+    # Кнопки
+    app.add_handler(CallbackQueryHandler(on_buttons))
+
+    # Текст после кнопок
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
     print("Bot is running. Open Telegram and send /start", flush=True)
 
@@ -555,9 +562,6 @@ def main():
 
     app.run_polling()
 
-
-if __name__ == "__main__":
-    main()
 
 
 
