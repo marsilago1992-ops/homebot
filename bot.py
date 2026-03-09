@@ -1,10 +1,11 @@
 import os
+
 print("BOOT: file loaded", flush=True)
 print("BOOT: has TELEGRAM_BOT_TOKEN key?", "TELEGRAM_BOT_TOKEN" in os.environ, flush=True)
 print("BOOT: token length =", len(os.environ.get("TELEGRAM_BOT_TOKEN","")), flush=True)
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError("Missing env var TELEGRAM_BOT_TOKEN")
+
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
 import re
 import logging
 from datetime import datetime, timedelta
@@ -568,5 +569,6 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
 
