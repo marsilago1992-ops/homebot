@@ -436,20 +436,16 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "rem:add":
-        context.user_data[MODE] = "REMIND_TIME"
-        await q.message.reply_text("Выбери время:", reply_markup=remind_time_kb())
-        return
-
-    if data.startswith("rem:time:"):
         context.user_data[MODE] = "REMIND_DATETIME"
         await q.message.reply_text(
-            "Введи дату и время в формате:\n\n"
+            "Введи дату и время:\n\n"
             "ДД.ММ.ГГГГ ЧЧ:ММ\n\n"
             "Пример:\n"
             "08.03.2026 19:30",
             reply_markup=back_kb()
         )
         return
+
 
     await q.message.reply_text("Не понял кнопку. Нажми /start", reply_markup=main_menu_kb())
 
@@ -518,13 +514,29 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
         return
 
-    if mode == "REMIND_TEXT":
-        tmp = context.user_data.get(TMP, {})
-        dt = context.user_data.get("remind_dt
-        if not delay_str:
+   if mode == "REMIND_TEXT":
+        dt = context.user_data.get("remind_dt")
+
+        if not dt:
             context.user_data.clear()
             await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
             return
+
+        by = update.effective_user.full_name
+        when_str = dt.strftime("%Y-%m-%d %H:%M")
+        sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
+
+        delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
+        chat_id = update.effective_chat.id
+
+        async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
+            await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
+
+        context.job_queue.run_once(send_job, when=delay_sec)
+
+        context.user_data.clear()
+        await reply(update, f"✅ Напоминание поставлено на {when_str}", reply_markup=remind_kb())
+        return
 
         td = parse_delay(delay_str)
         if not td:
@@ -590,6 +602,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
