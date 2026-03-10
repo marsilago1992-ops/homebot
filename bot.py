@@ -582,7 +582,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if mode == "REMIND_TEXT":
-    dt = context.user_data.get("remind_dt")
+        dt = context.user_data.get("remind_dt")
 
     if not dt:
         context.user_data.clear()
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
