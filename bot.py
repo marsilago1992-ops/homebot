@@ -526,14 +526,17 @@ async def on_buttons(update, context):
 # ====== TEXT INPUT AFTER BUTTONS ======
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ensure_headers()
+
     if not update.message:
         return
+
     text = (update.message.text or "").strip()
     if not text:
         return
 
     mode = context.user_data.get(MODE)
 
+    # ===== ПОКУПКИ =====
     if mode == "SHOP_ADD":
         by = update.effective_user.full_name
         sheet_append(SHEETS["shopping"], [[now_str(), text, "OPEN", by]])
@@ -541,6 +544,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, f"Добавил в покупки: {text}", reply_markup=shop_kb())
         return
 
+    # ===== ФИЛЬМЫ =====
     if mode == "MOVIE_ADD":
         by = update.effective_user.full_name
         sheet_append(SHEETS["movies"], [[now_str(), text, "OPEN", by]])
@@ -548,12 +552,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, f"🎬 Добавил: {text}", reply_markup=movies_kb())
         return
 
+    # ===== ПОСЫЛКИ =====
     if mode == "PICKUP_ADD":
         parts = [p.strip() for p in text.split(";")]
         if len(parts) < 4:
             await reply(
                 update,
-                "Формат неверный. Нужно 4 части через ';'\n"
+                "Формат неверный.\n"
                 "marketplace; пвз; YYYY-MM-DD; что\n\n"
                 "Пример:\n"
                 "ozon; ПВЗ у дома; 2026-03-10; зарядка",
@@ -563,103 +568,81 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         marketplace, point, deadline, item = parts[0], parts[1], parts[2], "; ".join(parts[3:])
         by = update.effective_user.full_name
-        sheet_append(SHEETS["pickups"], [[now_str(), marketplace, point, deadline, item, "OPEN", by]])
+
+        sheet_append(
+            SHEETS["pickups"],
+            [[now_str(), marketplace, point, deadline, item, "OPEN", by]]
+        )
+
         context.user_data.clear()
         await reply(update, f"📦 Добавил: {marketplace}, до {deadline}: {item}", reply_markup=pickups_kb())
         return
 
+    # ===== ВВОД ВРЕМЕНИ ДЛЯ НАПОМИНАНИЯ =====
     if mode == "REMIND_TIME_INPUT":
         time_str = text.strip()
 
-    try:
-        datetime.strptime(time_str, "%H:%M")
-    except ValueError:
-        await reply(update, "Неверный формат времени. Пример: 18:30")
-        return
-
-        date_str = context.user_data.get("remind_date")
-        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-
-        context.user_data["remind_dt"] = dt
-        context.user_data[MODE] = "REMIND_TEXT"
-
-    await reply(update, "Теперь напиши текст напоминания.")
-    return
-       
-    if mode == "REMIND_DATETIME":
         try:
-            dt = datetime.strptime(text, "%d.%m.%Y %H:%M")
+            datetime.strptime(time_str, "%H:%M")
         except ValueError:
-            await reply(
-                update,
-                "Неверный формат.\nИспользуй: ДД.ММ.ГГГГ ЧЧ:ММ\nПример: 08.03.2026 19:30",
-                reply_markup=back_kb()
-            )
+            await reply(update, "Неверный формат времени.\nПример: 19:30", reply_markup=back_kb())
             return
 
-    if dt <= datetime.now():
-        await reply(update, "Это время уже прошло.", reply_markup=back_kb())
-        return
+        date_str = context.user_data.get("remind_date")
+        if not date_str:
+            context.user_data.clear()
+            await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
+            return
 
-        context.user_data[MODE] = "REMIND_TEXT"
+        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+
+        if dt <= datetime.now():
+            await reply(update, "Это время уже прошло.", reply_markup=back_kb())
+            return
+
         context.user_data["remind_dt"] = dt
+        context.user_data[MODE] = "REMIND_TEXT"
 
         await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
         return
 
+    # ===== ТЕКСТ НАПОМИНАНИЯ =====
     if mode == "REMIND_TEXT":
         dt = context.user_data.get("remind_dt")
 
-    if not dt:
-        context.user_data.clear()
-        await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
-        return
+        if not dt:
+            context.user_data.clear()
+            await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
+            return
 
-    if dt <= datetime.now():
-        await reply(update, "Это время уже прошло.")
-        return
+        if dt <= datetime.now():
+            await reply(update, "Это время уже прошло.", reply_markup=main_menu_kb())
+            return
 
         by = update.effective_user.full_name
         when_str = dt.strftime("%Y-%m-%d %H:%M")
+
+        # сохраняем в таблицу
         sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
 
         delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
         chat_id = update.effective_chat.id
 
-    async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
-        await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
+        async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
+            await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
 
-    context.job_queue.run_once(send_job, when=delay_sec)
+        context.job_queue.run_once(send_job, when=delay_sec)
 
-    context.user_data.clear()
-    await reply(update, f"✅ Напоминание поставлено на {when_str}")
-    return
-
-    td = parse_delay(delay_str)
-    if not td:
         context.user_data.clear()
-        await reply(update, "Не понял время. Нажми /start", reply_markup=main_menu_kb())
+
+        await reply(
+            update,
+            f"✅ Напоминание установлено на {when_str}\n\nТекст: {text}",
+            reply_markup=remind_kb()
+        )
         return
 
-    dt = datetime.now() + td
-
-    by = update.effective_user.full_name
-    when_str = dt.strftime("%Y-%m-%d %H:%M")
-    sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
-
-    delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
-    chat_id = update.effective_chat.id
-
-    async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
-        await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
-
-    context.job_queue.run_once(send_job, when=delay_sec)
-
-    context.user_data.clear()
-    
-    await reply(update, f"✅ Ок! Напомню через {delay_str}: {text}", reply_markup=remind_kb())
-    return
-
+    # ===== ЕСЛИ ТЕКСТ ВНЕ СЦЕНАРИЯ =====
     await reply(update, "Нажми /start и выбери действие кнопками.", reply_markup=main_menu_kb())
 
 # ====== ERROR HANDLER ======
@@ -700,6 +683,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
