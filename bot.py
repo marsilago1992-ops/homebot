@@ -462,7 +462,7 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "rem:add":
-    now = datetime.now()
+        now = datetime.now()
     await q.message.reply_text(
         "📅 Выбери дату:",
         reply_markup=calendar_kb(now.year, now.month)
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
