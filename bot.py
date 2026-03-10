@@ -470,8 +470,8 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return
 
     if data.startswith("cal:"):
-    date_str = data.split(":")[1]   # 2026-03-15
-    context.user_data["remind_date"] = date_str
+        date_str = data.split(":")[1]   # 2026-03-15
+        context.user_data["remind_date"] = date_str
 
     await q.message.reply_text(
         "Теперь введи время в формате ЧЧ:ММ\nПример: 19:30",
@@ -674,6 +674,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
