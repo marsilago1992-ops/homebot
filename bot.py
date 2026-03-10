@@ -398,17 +398,19 @@ async def on_buttons(update, context):
     print("CLICK:", data, flush=True)
     await q.answer()
 
-     # ===== КЛИК ПО ДАТЕ =====
-if data.startswith("cal:"):
-    date_str = data.split(":")[1]
-    context.user_data["remind_date"] = date_str
-    context.user_data["mode"] = "REMIND_TIME"
-    await q.message.reply_text(
-        "🕒 Введи время в формате ЧЧ:ММ\nПример: 19:30",
-        reply_markup=back_kb()
-    )
-    return
-    
+    # ===== КЛИК ПО ДАТЕ В КАЛЕНДАРЕ =====
+    if data.startswith("cal:"):
+        date_str = data.split(":")[1]
+        context.user_data["remind_date"] = date_str
+        context.user_data["mode"] = "REMIND_TIME"
+
+        await q.message.reply_text(
+            "🕒 Введи время в формате ЧЧ:ММ\nПример: 19:30",
+            reply_markup=back_kb()
+        )
+        return
+
+    # ===== ГЛАВНОЕ МЕНЮ =====
     if data == "menu:home":
         context.user_data.pop(MODE, None)
         await q.message.reply_text("Выбери раздел:", reply_markup=main_menu_kb())
@@ -434,23 +436,35 @@ if data.startswith("cal:"):
         await q.message.reply_text("⏰ Напоминания:", reply_markup=remind_kb())
         return
 
+    # ===== ПОКУПКИ =====
     if data == "shop:add":
         context.user_data[MODE] = "SHOP_ADD"
-        await q.message.reply_text("Напиши, что купить (одним сообщением).", reply_markup=back_kb())
+        await q.message.reply_text(
+            "Напиши, что купить (одним сообщением).",
+            reply_markup=back_kb()
+        )
         return
 
     if data == "shop:list":
         await list_shopping(update, context)
         return
+
     if data == "shop:done":
         clear_open_shopping()
-        await q.message.reply_text("✅ Готово! Список покупок очищен.", reply_markup=shop_kb())
+        await q.message.reply_text(
+            "✅ Готово! Список покупок очищен.",
+            reply_markup=shop_kb()
+        )
         return
 
+    # ===== ПОСЫЛКИ =====
     if data == "pick:add":
         context.user_data[MODE] = "PICKUP_ADD"
         await q.message.reply_text(
-            "Напиши одной строкой:\nmarketplace; пвз; дедлайн(YYYY-MM-DD); что забрать\n\nПример:\nozon; ПВЗ у дома; 2026-03-10; зарядка",
+            "Напиши одной строкой:\n"
+            "marketplace; пвз; дедлайн(YYYY-MM-DD); что забрать\n\n"
+            "Пример:\n"
+            "ozon; ПВЗ у дома; 2026-03-10; зарядка",
             reply_markup=back_kb()
         )
         return
@@ -459,9 +473,13 @@ if data.startswith("cal:"):
         await pickups(update, context)
         return
 
+    # ===== КИНО =====
     if data == "mov:add":
         context.user_data[MODE] = "MOVIE_ADD"
-        await q.message.reply_text("Напиши название фильма/сериала.", reply_markup=back_kb())
+        await q.message.reply_text(
+            "Напиши название фильма/сериала.",
+            reply_markup=back_kb()
+        )
         return
 
     if data == "mov:list":
@@ -472,43 +490,39 @@ if data.startswith("cal:"):
         await choose_movie(update, context)
         return
 
+    # ===== НАПОМИНАНИЯ =====
     if data == "rem:add":
         now = datetime.now()
         await q.message.reply_text(
-        "📅 Выбери дату:",
-        reply_markup=calendar_kb(now.year, now.month)
-    )
-    return
-
-    if data.startswith("cal:"):
-        date_str = data.split(":")[1]   # 2026-03-15
-        context.user_data["remind_date"] = date_str
-
-    await q.message.reply_text(
-        "Теперь введи время в формате ЧЧ:ММ\nПример: 19:30",
-        reply_markup=back_kb()
-    )
-    return
+            "📅 Выбери дату:",
+            reply_markup=calendar_kb(now.year, now.month)
+        )
+        return
 
     if data == "rem:list":
         rows = sheet_get_all(SHEETS["reminders"])
         data_rows = rows[1:] if len(rows) > 1 else []
         open_items = [r for r in data_rows if len(r) >= 4 and r[3] == "OPEN"]
 
+        if not open_items:
+            await q.message.reply_text(
+                "Активных напоминаний нет ✅",
+                reply_markup=remind_kb()
+            )
+            return
 
-    if not open_items:
-        await q.message.reply_text("Активных напоминаний нет ✅", reply_markup=remind_kb())
+        lines = ["⏰ Активные напоминания:"]
+        for r in open_items[:30]:
+            lines.append(f"• {r[1]} — {r[2]}")
+
+        await q.message.reply_text("\n".join(lines), reply_markup=remind_kb())
         return
 
-    lines = ["⏰ Активные напоминания:"]
-    for r in open_items[:30]:
-        lines.append(f"• {r[1]} — {r[2]}")
-
-    await q.message.reply_text("\n".join(lines), reply_markup=remind_kb())
-    return
-
-    await q.message.reply_text("Не понял кнопку. Нажми /start", reply_markup=main_menu_kb())
-
+    # ===== НЕИЗВЕСТНАЯ КНОПКА =====
+    await q.message.reply_text(
+        "Не понял кнопку. Нажми /start",
+        reply_markup=main_menu_kb()
+    )
 # ====== TEXT INPUT AFTER BUTTONS ======
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ensure_headers()
@@ -686,6 +700,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
