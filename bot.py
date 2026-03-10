@@ -373,7 +373,7 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
 
     if data == "menu:home":
-        context.user_data.clear()
+        context.user_data.pop(MODE, None)
         await q.message.reply_text("Выбери раздел:", reply_markup=main_menu_kb())
         return
 
@@ -513,14 +513,14 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         context.user_data[MODE] = "REMIND_TEXT"
-        context.user_data[TMP] = {"datetime": dt}
+        context.user_data["remind_dt"] = dt
 
         await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
         return
 
     if mode == "REMIND_TEXT":
         tmp = context.user_data.get(TMP, {})
-        delay_str = tmp.get("delay")
+        dt = context.user_data.get("remind_dt
         if not delay_str:
             context.user_data.clear()
             await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
@@ -590,6 +590,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
