@@ -401,7 +401,6 @@ async def on_buttons(update, context):
      # ===== КЛИК ПО ДАТЕ =====
 if data.startswith("cal:"):
     date_str = data.split(":")[1]
-
     context.user_data["remind_date"] = date_str
     context.user_data["mode"] = "REMIND_TIME"
     await q.message.reply_text(
@@ -687,6 +686,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
