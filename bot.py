@@ -404,7 +404,6 @@ if data.startswith("cal:"):
 
     context.user_data["remind_date"] = date_str
     context.user_data["mode"] = "REMIND_TIME"
-
     await q.message.reply_text(
         "🕒 Введи время в формате ЧЧ:ММ\nПример: 19:30",
         reply_markup=back_kb()
@@ -688,6 +687,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
