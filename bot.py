@@ -29,6 +29,7 @@ from telegram.ext import (
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from calendar import monthrange
 
 logging.basicConfig(level=logging.INFO)
 
@@ -103,6 +104,30 @@ def ensure_headers():
     init("reminders", ["Created", "When", "Text", "Status", "By"])
 
 # ====== КНОПКИ ======
+def calendar_kb(year: int, month: int):
+    days = monthrange(year, month)[1]
+    buttons = []
+    row = []
+
+    for day in range(1, days + 1):
+        row.append(
+            InlineKeyboardButton(
+                str(day),
+                callback_data=f"cal:day:{year}-{month:02d}-{day:02d}"
+            )
+        )
+        if len(row) == 7:
+            buttons.append(row)
+            row = []
+
+    if row:
+        buttons.append(row)
+
+    buttons.append([
+        InlineKeyboardButton("⬅️ Назад", callback_data="menu:remind")
+    ])
+
+    return InlineKeyboardMarkup(buttons)
 def main_menu_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🛒 Покупки", callback_data="menu:shop"),
@@ -141,6 +166,7 @@ def movies_kb():
 def remind_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Поставить напоминание", callback_data="rem:add")],
+        [InlineKeyboardButton("📋 Активные напоминания", callback_data="rem:list")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="menu:home")],
     ])
 
@@ -436,16 +462,38 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "rem:add":
-        context.user_data[MODE] = "REMIND_DATETIME"
-        await q.message.reply_text(
-            "Введи дату и время:\n\n"
-            "ДД.ММ.ГГГГ ЧЧ:ММ\n\n"
-            "Пример:\n"
-            "08.03.2026 19:30",
-            reply_markup=back_kb()
-        )
+    now = datetime.now()
+    await q.message.reply_text(
+        "📅 Выбери дату:",
+        reply_markup=calendar_kb(now.year, now.month)
+    )
+    return
+
+    if data.startswith("cal:day:"):
+    date_str = data.split(":")[2]  # YYYY-MM-DD
+    context.user_data["remind_date"] = date_str
+    context.user_data[MODE] = "REMIND_TIME_INPUT"
+
+    await q.message.reply_text(
+        f"Дата выбрана: {date_str}\n\nВведите время:\nФормат: ЧЧ:ММ\nПример: 19:30"
+    )
+    return
+
+    if data == "rem:list":
+    rows = sheet_get_all(SHEETS["reminders"])
+    data_rows = rows[1:] if len(rows) > 1 else []
+    open_items = [r for r in data_rows if len(r) >= 4 and r[3] == "OPEN"]
+
+    if not open_items:
+        await q.message.reply_text("Активных напоминаний нет ✅", reply_markup=remind_kb())
         return
 
+    lines = ["⏰ Активные напоминания:"]
+    for r in open_items[:30]:
+        lines.append(f"• {r[1]} — {r[2]}")
+
+    await q.message.reply_text("\n".join(lines), reply_markup=remind_kb())
+    return
 
     await q.message.reply_text("Не понял кнопку. Нажми /start", reply_markup=main_menu_kb())
 
@@ -493,6 +541,25 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         await reply(update, f"📦 Добавил: {marketplace}, до {deadline}: {item}", reply_markup=pickups_kb())
         return
+
+   if mode == "REMIND_TIME_INPUT":
+    time_str = text.strip()
+
+    try:
+        datetime.strptime(time_str, "%H:%M")
+    except ValueError:
+        await reply(update, "Неверный формат времени. Пример: 18:30")
+        return
+
+    date_str = context.user_data.get("remind_date")
+    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+
+    context.user_data["remind_dt"] = dt
+    context.user_data[MODE] = "REMIND_TEXT"
+
+    await reply(update, "Теперь напиши текст напоминания.")
+    return
+       
     if mode == "REMIND_DATETIME":
         try:
             dt = datetime.strptime(text, "%d.%m.%Y %H:%M")
@@ -515,28 +582,32 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if mode == "REMIND_TEXT":
-        dt = context.user_data.get("remind_dt")
+    dt = context.user_data.get("remind_dt")
 
-        if not dt:
-            context.user_data.clear()
-            await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
-            return
-
-        by = update.effective_user.full_name
-        when_str = dt.strftime("%Y-%m-%d %H:%M")
-        sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
-
-        delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
-        chat_id = update.effective_chat.id
-
-        async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
-            await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
-
-        context.job_queue.run_once(send_job, when=delay_sec)
-
+    if not dt:
         context.user_data.clear()
-        await reply(update, f"✅ Напоминание поставлено на {when_str}", reply_markup=remind_kb())
+        await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
         return
+
+    if dt <= datetime.now():
+        await reply(update, "Это время уже прошло.")
+        return
+
+    by = update.effective_user.full_name
+    when_str = dt.strftime("%Y-%m-%d %H:%M")
+    sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
+
+    delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
+    chat_id = update.effective_chat.id
+
+    async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
+        await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
+
+    context.job_queue.run_once(send_job, when=delay_sec)
+
+    context.user_data.clear()
+    await reply(update, f"✅ Напоминание поставлено на {when_str}")
+    return
 
         td = parse_delay(delay_str)
         if not td:
