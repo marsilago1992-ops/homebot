@@ -571,9 +571,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if dt <= datetime.now():
-            await reply(update, "Это время уже прошло.", reply_markup=back_kb())
-            return
+    if dt <= datetime.now():
+        await reply(update, "Это время уже прошло.", reply_markup=back_kb())
+        return
 
         context.user_data[MODE] = "REMIND_TEXT"
         context.user_data["remind_dt"] = dt
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
