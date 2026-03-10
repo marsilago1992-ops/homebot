@@ -618,7 +618,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dt = datetime.now() + td
 
     by = update.effective_user.full_name
-        when_str = dt.strftime("%Y-%m-%d %H:%M")
+    when_str = dt.strftime("%Y-%m-%d %H:%M")
         sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
 
         delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
