@@ -621,15 +621,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     when_str = dt.strftime("%Y-%m-%d %H:%M")
     sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
 
-        delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
-        chat_id = update.effective_chat.id
+    delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
+    chat_id = update.effective_chat.id
 
-        async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
-            await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
+    async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
+        await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
 
-        context.job_queue.run_once(send_job, when=delay_sec)
+    context.job_queue.run_once(send_job, when=delay_sec)
 
-        context.user_data.clear()
+    context.user_data.clear()
         await reply(update, f"✅ Ок! Напомню через {delay_str}: {text}", reply_markup=remind_kb())
         return
 
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
