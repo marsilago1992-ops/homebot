@@ -480,9 +480,9 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return
 
     if data == "rem:list":
-    rows = sheet_get_all(SHEETS["reminders"])
-    data_rows = rows[1:] if len(rows) > 1 else []
-    open_items = [r for r in data_rows if len(r) >= 4 and r[3] == "OPEN"]
+        rows = sheet_get_all(SHEETS["reminders"])
+        data_rows = rows[1:] if len(rows) > 1 else []
+        open_items = [r for r in data_rows if len(r) >= 4 and r[3] == "OPEN"]
 
     if not open_items:
         await q.message.reply_text("Активных напоминаний нет ✅", reply_markup=remind_kb())
@@ -551,11 +551,11 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, "Неверный формат времени. Пример: 18:30")
         return
 
-    date_str = context.user_data.get("remind_date")
-    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        date_str = context.user_data.get("remind_date")
+        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
 
-    context.user_data["remind_dt"] = dt
-    context.user_data[MODE] = "REMIND_TEXT"
+        context.user_data["remind_dt"] = dt
+        context.user_data[MODE] = "REMIND_TEXT"
 
     await reply(update, "Теперь напиши текст напоминания.")
     return
@@ -593,12 +593,12 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, "Это время уже прошло.")
         return
 
-    by = update.effective_user.full_name
-    when_str = dt.strftime("%Y-%m-%d %H:%M")
-    sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
+        by = update.effective_user.full_name
+        when_str = dt.strftime("%Y-%m-%d %H:%M")
+        sheet_append(SHEETS["reminders"], [[now_str(), when_str, text, "OPEN", by]])
 
-    delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
-    chat_id = update.effective_chat.id
+        delay_sec = max(1, int((dt - datetime.now()).total_seconds()))
+        chat_id = update.effective_chat.id
 
     async def send_job(ctx: ContextTypes.DEFAULT_TYPE):
         await ctx.bot.send_message(chat_id=chat_id, text=f"⏰ Напоминание: {text}")
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
