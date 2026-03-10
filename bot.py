@@ -579,32 +579,35 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ===== ВВОД ВРЕМЕНИ ДЛЯ НАПОМИНАНИЯ =====
-    if mode == "REMIND_TIME_INPUT":
-        time_str = text.strip()
+   if mode == "REMIND_TIME_INPUT":
+    time_str = text.strip()
 
-        try:
-            datetime.strptime(time_str, "%H:%M")
-        except ValueError:
-            await reply(update, "Неверный формат времени.\nПример: 19:30", reply_markup=back_kb())
-            return
-
-        date_str = context.user_data.get("remind_date")
-        if not date_str:
-            context.user_data.clear()
-            await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
-            return
-
-        dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-
-        if dt <= datetime.now():
-            await reply(update, "Это время уже прошло.", reply_markup=back_kb())
-            return
-
-        context.user_data["remind_dt"] = dt
-        context.user_data[MODE] = "REMIND_TEXT"
-
-        await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
+    try:
+        datetime.strptime(time_str, "%H:%M")
+    except ValueError:
+        await reply(update, "Неверный формат времени.\nПример: 19:30", reply_markup=back_kb())
         return
+
+    date_str = context.user_data.get("remind_date")
+    if not date_str:
+        context.user_data.clear()
+        await reply(update, "Сценарий сбился. Нажми /start", reply_markup=main_menu_kb())
+        return
+
+    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+
+    if dt <= datetime.now():
+        await reply(update, "Это время уже прошло.", reply_markup=back_kb())
+        return
+
+    # 🔥 ВОТ КЛЮЧЕВАЯ СТРОКА
+    context.user_data[MODE] = "REMIND_TEXT"
+
+    # сохраняем дату
+    context.user_data["remind_dt"] = dt
+
+    await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
+    return
 
     # ===== ТЕКСТ НАПОМИНАНИЯ =====
     if mode == "REMIND_TEXT":
@@ -683,6 +686,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
