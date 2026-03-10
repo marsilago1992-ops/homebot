@@ -610,12 +610,12 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return
 
     td = parse_delay(delay_str)
-        if not td:
-            context.user_data.clear()
-            await reply(update, "Не понял время. Нажми /start", reply_markup=main_menu_kb())
-            return
+    if not td:
+        context.user_data.clear()
+        await reply(update, "Не понял время. Нажми /start", reply_markup=main_menu_kb())
+        return
 
-        dt = datetime.now() + td
+    dt = datetime.now() + td
 
         by = update.effective_user.full_name
         when_str = dt.strftime("%Y-%m-%d %H:%M")
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
