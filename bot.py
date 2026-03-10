@@ -484,6 +484,19 @@ async def on_buttons(update, context):
         data_rows = rows[1:] if len(rows) > 1 else []
         open_items = [r for r in data_rows if len(r) >= 4 and r[3] == "OPEN"]
 
+    # ===== КЛИК ПО ДАТЕ =====
+if data.startswith("cal:"):
+    date_str = data.split(":")[1]
+
+    context.user_data["remind_date"] = date_str
+    context.user_data["mode"] = "REMIND_TIME"
+
+    await q.message.reply_text(
+        "🕒 Введи время в формате ЧЧ:ММ\nПример: 19:30",
+        reply_markup=back_kb()
+    )
+    return
+
     if not open_items:
         await q.message.reply_text("Активных напоминаний нет ✅", reply_markup=remind_kb())
         return
@@ -674,6 +687,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
