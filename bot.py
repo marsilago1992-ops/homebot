@@ -514,7 +514,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, "Теперь напиши текст напоминания.", reply_markup=back_kb())
         return
 
-   if mode == "REMIND_TEXT":
+    if mode == "REMIND_TEXT":
         dt = context.user_data.get("remind_dt")
 
         if not dt:
@@ -602,6 +602,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
