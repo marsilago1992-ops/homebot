@@ -634,7 +634,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await reply(update, f"✅ Ок! Напомню через {delay_str}: {text}", reply_markup=remind_kb())
     return
 
-        await reply(update, "Нажми /start и выбери действие кнопками.", reply_markup=main_menu_kb())
+    await reply(update, "Нажми /start и выбери действие кнопками.", reply_markup=main_menu_kb())
 
 # ====== ERROR HANDLER ======
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -674,6 +674,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
