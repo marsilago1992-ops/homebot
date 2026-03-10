@@ -632,7 +632,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
     await reply(update, f"✅ Ок! Напомню через {delay_str}: {text}", reply_markup=remind_kb())
-        return
+    return
 
         await reply(update, "Нажми /start и выбери действие кнопками.", reply_markup=main_menu_kb())
 
@@ -674,6 +674,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
