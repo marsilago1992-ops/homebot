@@ -609,7 +609,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await reply(update, f"✅ Напоминание поставлено на {when_str}")
     return
 
-        td = parse_delay(delay_str)
+    td = parse_delay(delay_str)
         if not td:
             context.user_data.clear()
             await reply(update, "Не понял время. Нажми /start", reply_markup=main_menu_kb())
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
