@@ -525,6 +525,9 @@ async def on_buttons(update, context):
     )
 # ====== TEXT INPUT AFTER BUTTONS ======
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("TEXT HANDLER TRIGGERED", flush=True)
+    print("USER_DATA:", context.user_data, flush=True)
+
     ensure_headers()
 
     if not update.message:
@@ -581,7 +584,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== ВВОД ВРЕМЕНИ =====
     if mode == "REMIND_TIME_INPUT":
-        time_str = text.strip()
+        print("TIME INPUT MODE", flush=True)
+        print("TEXT:", text, flush=True)
 
         try:
             datetime.strptime(time_str, "%H:%M")
@@ -609,7 +613,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== ТЕКСТ НАПОМИНАНИЯ =====
     if mode == "REMIND_TEXT":
-        dt = context.user_data.get("remind_dt")
+        print("REMINDER TEXT MODE", flush=True)
 
         if not dt:
             context.user_data.clear()
@@ -684,6 +688,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
