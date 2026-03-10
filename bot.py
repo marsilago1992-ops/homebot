@@ -542,7 +542,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply(update, f"📦 Добавил: {marketplace}, до {deadline}: {item}", reply_markup=pickups_kb())
         return
 
-   if mode == "REMIND_TIME_INPUT":
+    if mode == "REMIND_TIME_INPUT":
         time_str = text.strip()
 
     try:
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
