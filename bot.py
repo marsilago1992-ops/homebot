@@ -543,7 +543,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
    if mode == "REMIND_TIME_INPUT":
-    time_str = text.strip()
+       time_str = text.strip()
 
     try:
         datetime.strptime(time_str, "%H:%M")
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
