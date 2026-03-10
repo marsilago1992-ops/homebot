@@ -392,11 +392,11 @@ async def remind(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Ок! Напомню {when_str}: {text}")
 
 # ====== BUTTON HANDLER ======
-async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    ensure_headers()
+async def on_buttons(update, context):
     q = update.callback_query
-    await q.answer()
     data = q.data
+    print("CLICK:", data, flush=True)
+    await q.answer()
 
     if data == "menu:home":
         context.user_data.pop(MODE, None)
@@ -674,6 +674,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
