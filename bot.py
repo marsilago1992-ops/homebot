@@ -463,16 +463,16 @@ async def on_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "rem:add":
         now = datetime.now()
-    await q.message.reply_text(
+        await q.message.reply_text(
         "📅 Выбери дату:",
         reply_markup=calendar_kb(now.year, now.month)
     )
     return
 
     if data.startswith("cal:day:"):
-    date_str = data.split(":")[2]  # YYYY-MM-DD
-    context.user_data["remind_date"] = date_str
-    context.user_data[MODE] = "REMIND_TIME_INPUT"
+        date_str = data.split(":")[2]  # YYYY-MM-DD
+        context.user_data["remind_date"] = date_str
+        context.user_data[MODE] = "REMIND_TIME_INPUT"
 
     await q.message.reply_text(
         f"Дата выбрана: {date_str}\n\nВведите время:\nФормат: ЧЧ:ММ\nПример: 19:30"
@@ -673,6 +673,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
