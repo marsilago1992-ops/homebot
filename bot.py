@@ -1,229 +1,227 @@
+# ================== IMPORTS ==================
 import os
-import calendar
 import logging
 import random
-import requests
 from datetime import datetime, timedelta
+from typing import List
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
+    ContextTypes,
     CallbackQueryHandler,
     MessageHandler,
-    ContextTypes,
     filters,
 )
 
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
+logging.basicConfig(level=logging.INFO)
 
-# ================= ENV =================
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-OMDB_KEY = os.getenv("OMDB_API_KEY")
+if not TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN not set")
 
-if not TOKEN or not SPREADSHEET_ID:
-    raise RuntimeError("Missing env vars")
-
-# ================= GOOGLE =================
-if os.getenv("GOOGLE_SA_JSON"):
-    with open("service_account.json", "w") as f:
-        f.write(os.getenv("GOOGLE_SA_JSON"))
-
-creds = Credentials.from_service_account_file(
-    "service_account.json",
-    scopes=["https://www.googleapis.com/auth/spreadsheets"],
-)
-sheets = build("sheets", "v4", credentials=creds)
-
-# ================= UTILS =================
+# ================== UI STATE ==================
 MODE = "mode"
 
-def now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
-
-def sheet_append(sheet, values):
-    sheets.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID,
-        range=f"{sheet}!A1",
-        valueInputOption="USER_ENTERED",
-        body={"values": values},
-    ).execute()
-
-async def reply(update: Update, text: str, **kw):
-    if update.effective_message:
-        await update.effective_message.reply_text(text, **kw)
-
-# ================= KEYBOARDS =================
-def main_kb():
+# ================== KEYBOARDS ==================
+def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛒 Покупки", callback_data="shop")],
-        [InlineKeyboardButton("🎬 Фильм из интернета", callback_data="movie")],
-        [InlineKeyboardButton("⏰ Напоминание", callback_data="remind")],
+        [InlineKeyboardButton("👨‍👩‍👧 Семья", callback_data="menu:family")],
+        [InlineKeyboardButton("🎯 Досуг", callback_data="menu:fun")],
+        [InlineKeyboardButton("🍽 Питание", callback_data="menu:food")],
+        [InlineKeyboardButton("🧰 Дом", callback_data="menu:homecare")],
+        [InlineKeyboardButton("🛒 Покупки", callback_data="menu:shop")],
+        [InlineKeyboardButton("⏰ Напоминания", callback_data="menu:remind")],
     ])
 
-def back_kb():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data="home")]])
+def back_btn():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu:home")]
+    ])
 
-# ================= CALENDAR =================
-def calendar_kb(year, month):
-    kb = []
-    kb.append([InlineKeyboardButton(f"{calendar.month_name[month]} {year}", callback_data="ignore")])
-    kb.append([InlineKeyboardButton(d, callback_data="ignore") for d in ["Mo","Tu","We","Th","Fr","Sa","Su"]])
+# ===== Семья =====
+def family_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Добавить задачу", callback_data="family:add")],
+        [InlineKeyboardButton("📋 Список задач", callback_data="family:list")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu:home")]
+    ])
 
-    for week in calendar.monthcalendar(year, month):
-        row = []
-        for day in week:
-            if day == 0:
-                row.append(InlineKeyboardButton(" ", callback_data="ignore"))
-            else:
-                date = f"{year}-{month:02d}-{day:02d}"
-                row.append(InlineKeyboardButton(str(day), callback_data=f"cal:{date}"))
-        kb.append(row)
+# ===== Досуг =====
+def fun_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎲 Чем заняться дома", callback_data="fun:home")],
+        [InlineKeyboardButton("🚶 Куда сходить", callback_data="fun:go")],
+        [InlineKeyboardButton("🎬 Случайный фильм", callback_data="fun:movie")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu:home")]
+    ])
 
-    return InlineKeyboardMarkup(kb)
+# ===== Питание =====
+def food_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Добавить блюдо", callback_data="food:add")],
+        [InlineKeyboardButton("📅 Меню на неделю", callback_data="food:list")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu:home")]
+    ])
 
-# ================= OMDB =================
-def get_movie():
-    words = ["love","war","life","night","world","game","future"]
-    q = random.choice(words)
+# ===== Дом =====
+def homecare_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Добавить задачу", callback_data="homecare:add")],
+        [InlineKeyboardButton("📋 Список", callback_data="homecare:list")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu:home")]
+    ])
 
-    url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}&s={q}&type=movie"
-    r = requests.get(url, timeout=10).json()
+# ================== DATA ==================
+family_tasks = []
+food_plan = []
+home_tasks = []
 
-    if "Search" not in r:
-        return None
+fun_home = [
+    "🎲 Настольные игры",
+    "🎬 Семейный фильм",
+    "🍕 Приготовить пиццу",
+    "🎮 Поиграть в видеоигры",
+    "📚 Почитать книгу",
+]
 
-    m = random.choice(r["Search"])
-    imdb = m["imdbID"]
+fun_go = [
+    "☕ Сходить в кофейню",
+    "🌳 Прогулка в парке",
+    "🎥 Кинотеатр",
+    "🛍 Торговый центр",
+    "🏞 Выезд на природу",
+]
 
-    d = requests.get(
-        f"http://www.omdbapi.com/?apikey={OMDB_KEY}&i={imdb}&plot=full"
-    ).json()
+movies_online = [
+    "🎬 Интерстеллар",
+    "🎬 Начало",
+    "🎬 Достать ножи",
+    "🎬 Марсианин",
+    "🎬 Ford против Ferrari",
+]
 
-    return {
-        "title": d.get("Title"),
-        "year": d.get("Year"),
-        "genre": d.get("Genre"),
-        "rating": d.get("imdbRating"),
-        "plot": d.get("Plot"),
-        "poster": d.get("Poster"),
-    }
-
-# ================= HANDLERS =================
+# ================== COMMANDS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await reply(update, "🏠 Главное меню", reply_markup=main_kb())
+    await update.message.reply_text(
+        "🏠 Семейный ассистент готов!",
+        reply_markup=main_menu()
+    )
 
+# ================== BUTTONS ==================
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     data = q.data
 
-    # ===== HOME =====
-    if data == "home":
-        context.user_data.clear()
-        await q.message.reply_text("🏠 Главное меню", reply_markup=main_kb())
+    # Главное меню
+    if data == "menu:home":
+        await q.message.reply_text("Главное меню:", reply_markup=main_menu())
         return
 
-    # ===== MOVIE =====
-    if data == "movie":
-        await q.message.reply_text("🎬 Ищу фильм...")
-        m = get_movie()
-        if not m:
-            await q.message.reply_text("Не нашёл фильм 😢")
+    # ===== СЕМЬЯ =====
+    if data == "menu:family":
+        await q.message.reply_text("👨‍👩‍👧 Семейные задачи:", reply_markup=family_kb())
+        return
+
+    if data == "family:add":
+        context.user_data[MODE] = "FAMILY_ADD"
+        await q.message.reply_text("Напиши задачу для семьи:", reply_markup=back_btn())
+        return
+
+    if data == "family:list":
+        if not family_tasks:
+            await q.message.reply_text("Задач нет ✅", reply_markup=family_kb())
             return
-
-        txt = (
-            f"🎬 *{m['title']}* ({m['year']})\n"
-            f"⭐ IMDb: {m['rating']}\n"
-            f"🎭 {m['genre']}\n\n"
-            f"{m['plot']}"
-        )
-
-        if m["poster"] and m["poster"] != "N/A":
-            await q.message.reply_photo(m["poster"], caption=txt, parse_mode="Markdown")
-        else:
-            await q.message.reply_text(txt, parse_mode="Markdown")
+        text = "📋 Семейные задачи:\n" + "\n".join(f"• {t}" for t in family_tasks)
+        await q.message.reply_text(text, reply_markup=family_kb())
         return
 
-    # ===== REMINDER =====
-    if data == "remind":
-        now = datetime.now()
-        await q.message.reply_text(
-            "📅 Выбери дату:",
-            reply_markup=calendar_kb(now.year, now.month)
-        )
+    # ===== ДОСУГ =====
+    if data == "menu:fun":
+        await q.message.reply_text("🎯 Досуг:", reply_markup=fun_kb())
         return
 
-    # ===== DATE PICK =====
-    if data.startswith("cal:"):
-        date = data.split(":")[1]
-        context.user_data["date"] = date
-        context.user_data[MODE] = "TIME"
-        await q.message.reply_text(
-            "🕒 Введи время ЧЧ:ММ\nПример: 19:30",
-            reply_markup=back_kb()
-        )
+    if data == "fun:home":
+        await q.message.reply_text(random.choice(fun_home), reply_markup=fun_kb())
         return
 
+    if data == "fun:go":
+        await q.message.reply_text(random.choice(fun_go), reply_markup=fun_kb())
+        return
+
+    if data == "fun:movie":
+        await q.message.reply_text(random.choice(movies_online), reply_markup=fun_kb())
+        return
+
+    # ===== ПИТАНИЕ =====
+    if data == "menu:food":
+        await q.message.reply_text("🍽 План питания:", reply_markup=food_kb())
+        return
+
+    if data == "food:add":
+        context.user_data[MODE] = "FOOD_ADD"
+        await q.message.reply_text("Напиши блюдо:", reply_markup=back_btn())
+        return
+
+    if data == "food:list":
+        if not food_plan:
+            await q.message.reply_text("Меню пусто", reply_markup=food_kb())
+            return
+        text = "📅 Меню:\n" + "\n".join(f"• {m}" for m in food_plan)
+        await q.message.reply_text(text, reply_markup=food_kb())
+        return
+
+    # ===== ДОМ =====
+    if data == "menu:homecare":
+        await q.message.reply_text("🧰 Обслуживание дома:", reply_markup=homecare_kb())
+        return
+
+    if data == "homecare:add":
+        context.user_data[MODE] = "HOME_ADD"
+        await q.message.reply_text("Напиши задачу по дому:", reply_markup=back_btn())
+        return
+
+    if data == "homecare:list":
+        if not home_tasks:
+            await q.message.reply_text("Задач нет", reply_markup=homecare_kb())
+            return
+        text = "🧰 Задачи по дому:\n" + "\n".join(f"• {t}" for t in home_tasks)
+        await q.message.reply_text(text, reply_markup=homecare_kb())
+        return
+
+# ================== TEXT ==================
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     mode = context.user_data.get(MODE)
-    text = update.message.text.strip()
 
-    # ===== TIME INPUT =====
-    if mode == "TIME":
-        try:
-            datetime.strptime(text, "%H:%M")
-        except:
-            await reply(update, "Неверный формат времени. Пример 18:30")
-            return
-
-        date = context.user_data.get("date")
-        dt = datetime.strptime(f"{date} {text}", "%Y-%m-%d %H:%M")
-
-        if dt <= datetime.now():
-            await reply(update, "Это время уже прошло")
-            return
-
-        context.user_data["dt"] = dt
-        context.user_data[MODE] = "TEXT"
-
-        await reply(update, "✏️ Введи текст напоминания")
-        return
-
-    # ===== REMINDER TEXT =====
-    if mode == "TEXT":
-        dt = context.user_data.get("dt")
-        user = update.effective_user.full_name
-
-        sheet_append("Reminders", [[now_str(), dt.strftime("%Y-%m-%d %H:%M"), text, "OPEN", user]])
-
-        delay = max(1, int((dt - datetime.now()).total_seconds()))
-        chat_id = update.effective_chat.id
-
-        async def job(ctx):
-            await ctx.bot.send_message(chat_id, f"⏰ Напоминание: {text}")
-
-        context.job_queue.run_once(job, delay)
-
+    if mode == "FAMILY_ADD":
+        family_tasks.append(text)
         context.user_data.clear()
-        await reply(update, f"✅ Напоминание установлено на {dt.strftime('%d.%m %H:%M')}")
+        await update.message.reply_text("✅ Задача добавлена", reply_markup=family_kb())
         return
 
-# ================= MAIN =================
+    if mode == "FOOD_ADD":
+        food_plan.append(text)
+        context.user_data.clear()
+        await update.message.reply_text("✅ Блюдо добавлено", reply_markup=food_kb())
+        return
+
+    if mode == "HOME_ADD":
+        home_tasks.append(text)
+        context.user_data.clear()
+        await update.message.reply_text("✅ Задача добавлена", reply_markup=homecare_kb())
+        return
+
+# ================== MAIN ==================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    print("BOT RUNNING")
+    print("Bot started")
     app.run_polling()
 
 if __name__ == "__main__":
