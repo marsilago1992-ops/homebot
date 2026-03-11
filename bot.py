@@ -399,16 +399,17 @@ async def on_buttons(update, context):
     await q.answer()
 
     # ===== КЛИК ПО ДАТЕ В КАЛЕНДАРЕ =====
-    if data.startswith("cal:"):
-        date_str = data.split(":")[1]
+   if data.startswith("cal:"):
+        parts = data.split(":")
+        date_str = parts[2]   # было [1]
         context.user_data["remind_date"] = date_str
         context.user_data["mode"] = "REMIND_TIME"
 
-        await q.message.reply_text(
-            "🕒 Введи время в формате ЧЧ:ММ\nПример: 19:30",
-            reply_markup=back_kb()
-        )
-        return
+    await q.message.reply_text(
+        "🕒 Введи время в формате ЧЧ:ММ\nПример: 19:30",
+        reply_markup=back_kb()
+    )
+    return
 
     # ===== ГЛАВНОЕ МЕНЮ =====
     if data == "menu:home":
@@ -688,6 +689,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
