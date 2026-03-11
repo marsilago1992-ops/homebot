@@ -10,148 +10,92 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     CallbackQueryHandler,
+    MessageHandler,
+    filters,
 )
 
 # ========= ENV =========
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OMDB_KEY = os.getenv("OMDB_API_KEY")
-SPOON_KEY = os.getenv("SPOONACULAR_KEY")
 
 if not TOKEN:
     raise RuntimeError("No TELEGRAM_BOT_TOKEN")
 if not OMDB_KEY:
     raise RuntimeError("No OMDB_API_KEY")
-if not SPOON_KEY:
-    raise RuntimeError("No SPOONACULAR_KEY")
 
 logging.basicConfig(level=logging.INFO)
+
+# ========= MEMORY =========
+shopping_list = []
+home_plans = []
+reminders = []
 
 # ========= KEYBOARDS =========
 def main_kb():
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛒 Продукты", callback_data="shop")],
+        [InlineKeyboardButton("⏰ Напоминание", callback_data="remind")],
         [InlineKeyboardButton("🎬 Фильм", callback_data="movie")],
-        [InlineKeyboardButton("🍳 Что приготовить", callback_data="cook")],
-        [InlineKeyboardButton("🌆 Куда сходить", callback_data="go_out")],
-        [InlineKeyboardButton("🏠 Чем заняться дома", callback_data="home_fun")],
-        [InlineKeyboardButton("🧹 Дом", callback_data="home_tasks")],
+        [InlineKeyboardButton("🏠 Дом", callback_data="home")],
     ])
 
 def back_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Назад", callback_data="home")]
+        [InlineKeyboardButton("⬅️ Назад", callback_data="menu")]
     ])
 
-# ========= MOVIES (OMDB) =========
+# ========= MOVIES =========
 def get_random_movie():
-    letters = "abcdefghijklmnopqrstuvwxyz"
-    letter = random.choice(letters)
+    try:
+        r = requests.get(
+            "http://www.omdbapi.com/",
+            params={
+                "apikey": OMDB_KEY,
+                "s": random.choice("abcdefghijklmnopqrstuvwxyz"),
+                "type": "movie"
+            },
+            timeout=10,
+        ).json()
 
-    r = requests.get(
-        "http://www.omdbapi.com/",
-        params={"apikey": OMDB_KEY, "s": letter, "type": "movie"},
-        timeout=10,
-    ).json()
+        if "Search" not in r:
+            return "Не удалось найти фильм 😢"
 
-    if "Search" not in r:
-        return "Не удалось найти фильм 😢"
+        m = random.choice(r["Search"])
 
-    m = random.choice(r["Search"])
+        info = requests.get(
+            "http://www.omdbapi.com/",
+            params={"apikey": OMDB_KEY, "i": m["imdbID"], "plot": "short"},
+            timeout=10,
+        ).json()
 
-    info = requests.get(
-        "http://www.omdbapi.com/",
-        params={"apikey": OMDB_KEY, "i": m["imdbID"], "plot": "short"},
-        timeout=10,
-    ).json()
+        return (
+            f"🎬 *{info.get('Title')}* ({info.get('Year')})\n"
+            f"⭐ IMDb: {info.get('imdbRating')}\n"
+            f"🎭 Жанр: {info.get('Genre')}\n\n"
+            f"📝 {info.get('Plot')}"
+        )
+    except:
+        return "Ошибка при запросе фильма"
 
-    return (
-        f"🎬 *{info.get('Title')}* ({info.get('Year')})\n"
-        f"⭐ IMDb: {info.get('imdbRating')}\n"
-        f"🎭 Жанр: {info.get('Genre')}\n\n"
-        f"📝 {info.get('Plot')}"
-    )
-
-# ========= COOKING (SPOONACULAR) =========
-def get_recipe():
-    r = requests.get(
-        "https://api.spoonacular.com/recipes/random",
-        params={"apiKey": SPOON_KEY, "number": 1},
-        timeout=10,
-    ).json()
-
-    recipe = r["recipes"][0]
-
-    ingredients = "\n".join(
-        f"• {i['original']}" for i in recipe["extendedIngredients"]
-    )
-
-    return (
-        f"🍽 *{recipe['title']}*\n\n"
-        f"🧂 Ингредиенты:\n{ingredients}\n\n"
-        f"📖 Инструкция:\n{recipe.get('instructions','—')}"
-    )
-
-# ========= GO OUT =========
-def where_to_go():
+# ========= HOME IDEAS =========
+def random_home_idea():
     ideas = [
-        "🌌 Съездить смотреть звёзды за город",
-        "🎭 Иммерсивный театр или квест",
-        "🍷 Дегустация вина / кофе",
-        "🎨 Арт-пространство или выставка",
-        "🧘 Йога на природе",
-        "🚴 Веломаршрут по новым местам",
-        "📸 Фото-прогулка по красивым локациям",
-        "🎲 Антикафе с настолками",
-        "🎤 Стендап или открытый микрофон",
-        "🛶 Сап-борды или лодки",
-        "🏎 Картинг",
-        "🏹 Стрельба из лука",
-        "🍣 Мастер-класс по готовке",
-        "🎬 Кино под открытым небом",
-        "🧖 Спа-день"
-    ]
-    return random.choice(ideas)
-
-# ========= HOME FUN =========
-def home_fun():
-    ideas = [
-        "🎬 Устроить тематический киновечер",
-        "🍕 Приготовить новое блюдо вместе",
-        "🧩 Большой пазл или LEGO",
-        "🎮 Турнир по играм",
-        "📚 Час саморазвития",
-        "🧠 Настольные игры",
-        "🎧 Подкасты + уборка",
-        "🖼 Разобрать фотоархив",
+        "🧹 Генеральная уборка",
+        "🗂 Разобрать шкафы",
+        "🛠 Починить мелкие поломки",
         "💡 Сделать перестановку",
-        "🛋 Обновить интерьер мелочами",
-        "📝 Планирование целей",
-        "🎨 Творческий вечер",
-        "💪 Домашняя тренировка",
-        "🧘 Медитация",
-        "📖 Совместное чтение"
+        "🛋 Обновить интерьер",
+        "🌿 Уход за растениями",
+        "🧺 Разобрать вещи",
+        "📦 Организовать хранение",
+        "🧼 Глубокая чистка кухни",
+        "🚿 Чистка ванной",
+        "💡 Улучшить освещение",
+        "🖼 Повесить декор",
+        "🔌 Проверить технику",
+        "🛏 Обновить текстиль"
     ]
     return random.choice(ideas)
-
-# ========= HOME TASKS =========
-def home_tasks():
-    tasks = [
-        "🧹 Генеральная уборка комнаты",
-        "🪟 Помыть окна",
-        "🛁 Глубокая чистка ванной",
-        "🍳 Разобрать кухонные шкафы",
-        "🧺 Стирка и сортировка вещей",
-        "👕 Разобрать гардероб",
-        "🗂 Навести порядок в документах",
-        "🔧 Починить мелкие поломки",
-        "🌿 Уход за растениями",
-        "🛒 Составить список покупок",
-        "💡 Проверить лампочки и батарейки",
-        "📦 Разобрать кладовку",
-        "🧼 Дезинфекция поверхностей",
-        "🛏 Смена постельного белья",
-        "🧯 Проверить безопасность дома"
-    ]
-    return random.choice(tasks)
 
 # ========= HANDLERS =========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,28 +104,110 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_kb()
     )
 
+# ========= BUTTONS =========
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     d = q.data
 
-    if d == "home":
+    if d == "menu":
         await q.message.reply_text("Меню:", reply_markup=main_kb())
 
+    # ===== SHOPPING =====
+    elif d == "shop":
+        text = "🛒 Список покупок:\n"
+        if not shopping_list:
+            text += "пусто"
+        else:
+            for i, item in enumerate(shopping_list, 1):
+                text += f"{i}. {item}\n"
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Добавить", callback_data="shop_add")],
+            [InlineKeyboardButton("🗑 Очистить", callback_data="shop_clear")],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="menu")]
+        ])
+        await q.message.reply_text(text, reply_markup=kb)
+
+    elif d == "shop_add":
+        context.user_data["mode"] = "shop_add"
+        await q.message.reply_text("Напиши продукт:")
+
+    elif d == "shop_clear":
+        shopping_list.clear()
+        await q.message.reply_text("Список очищен ✅", reply_markup=back_kb())
+
+    # ===== REMINDERS =====
+    elif d == "remind":
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Добавить", callback_data="rem_add")],
+            [InlineKeyboardButton("📋 Список", callback_data="rem_list")],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="menu")]
+        ])
+        await q.message.reply_text("⏰ Напоминания:", reply_markup=kb)
+
+    elif d == "rem_add":
+        context.user_data["mode"] = "rem_text"
+        await q.message.reply_text("Напиши текст напоминания:")
+
+    elif d == "rem_list":
+        if not reminders:
+            await q.message.reply_text("Нет активных напоминаний", reply_markup=back_kb())
+        else:
+            text = "⏰ Напоминания:\n"
+            for r in reminders:
+                text += f"• {r}\n"
+            await q.message.reply_text(text, reply_markup=back_kb())
+
+    # ===== MOVIES =====
     elif d == "movie":
         await q.message.reply_text(get_random_movie(), parse_mode="Markdown")
 
-    elif d == "cook":
-        await q.message.reply_text(get_recipe(), parse_mode="Markdown")
+    # ===== HOME =====
+    elif d == "home":
+        text = "🏠 Дом\n\n"
+        if home_plans:
+            text += "Твои планы:\n"
+            for i, p in enumerate(home_plans, 1):
+                text += f"{i}. {p}\n"
+            text += "\n"
 
-    elif d == "go_out":
-        await q.message.reply_text(where_to_go(), reply_markup=back_kb())
+        text += f"💡 Идея: {random_home_idea()}"
 
-    elif d == "home_fun":
-        await q.message.reply_text(home_fun(), reply_markup=back_kb())
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Добавить план", callback_data="home_add")],
+            [InlineKeyboardButton("🗑 Очистить планы", callback_data="home_clear")],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="menu")]
+        ])
+        await q.message.reply_text(text, reply_markup=kb)
 
-    elif d == "home_tasks":
-        await q.message.reply_text(home_tasks(), reply_markup=back_kb())
+    elif d == "home_add":
+        context.user_data["mode"] = "home_add"
+        await q.message.reply_text("Напиши план по дому:")
+
+    elif d == "home_clear":
+        home_plans.clear()
+        await q.message.reply_text("Планы очищены ✅", reply_markup=back_kb())
+
+# ========= TEXT INPUT =========
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = context.user_data.get("mode")
+    text = update.message.text.strip()
+
+    if mode == "shop_add":
+        shopping_list.append(text)
+        context.user_data.clear()
+        await update.message.reply_text("Добавлено ✅", reply_markup=main_kb())
+
+    elif mode == "home_add":
+        home_plans.append(text)
+        context.user_data.clear()
+        await update.message.reply_text("План добавлен ✅", reply_markup=main_kb())
+
+    elif mode == "rem_text":
+        reminders.append(text)
+        context.user_data.clear()
+        await update.message.reply_text("Напоминание сохранено ✅", reply_markup=main_kb())
 
 # ========= MAIN =========
 def main():
@@ -189,6 +215,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     print("Bot started")
     app.run_polling()
