@@ -1,91 +1,83 @@
 import os
-import re
-import json
 import random
 import logging
-import asyncio
 import requests
 from datetime import datetime, timedelta
-from typing import List
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
     CallbackQueryHandler,
-    MessageHandler,
-    filters,
 )
 
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-
 # ========= ENV =========
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+OMDB_KEY = os.getenv("OMDB_API_KEY")
 SPOON_KEY = os.getenv("SPOONACULAR_KEY")
 
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
-if not SPREADSHEET_ID:
-    raise RuntimeError("Missing SPREADSHEET_ID")
+if not TOKEN:
+    raise RuntimeError("No TELEGRAM_BOT_TOKEN")
+if not OMDB_KEY:
+    raise RuntimeError("No OMDB_API_KEY")
 if not SPOON_KEY:
-    raise RuntimeError("Missing SPOONACULAR_KEY")
+    raise RuntimeError("No SPOONACULAR_KEY")
 
-# ========= LOG =========
 logging.basicConfig(level=logging.INFO)
 
-# ========= GOOGLE SHEETS =========
-SERVICE_ACCOUNT_FILE = "service_account.json"
-sa = os.environ.get("GOOGLE_SA_JSON")
-if sa and not os.path.exists(SERVICE_ACCOUNT_FILE):
-    with open(SERVICE_ACCOUNT_FILE, "w") as f:
-        f.write(sa)
+# ========= KEYBOARDS =========
+def main_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎬 Фильм", callback_data="movie")],
+        [InlineKeyboardButton("🍳 Что приготовить", callback_data="cook")],
+        [InlineKeyboardButton("🌆 Куда сходить", callback_data="go_out")],
+        [InlineKeyboardButton("🏠 Чем заняться дома", callback_data="home_fun")],
+        [InlineKeyboardButton("🧹 Дом", callback_data="home_tasks")],
+    ])
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-sheets = build("sheets", "v4", credentials=creds)
+def back_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Назад", callback_data="home")]
+    ])
 
-SHEETS = {
-    "shopping": "Shopping",
-    "reminders": "Reminders",
-}
+# ========= MOVIES (OMDB) =========
+def get_random_movie():
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    letter = random.choice(letters)
 
-def sheet_append(name, values):
-    sheets.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID,
-        range=f"{name}!A1",
-        valueInputOption="USER_ENTERED",
-        body={"values": values},
-    ).execute()
+    r = requests.get(
+        "http://www.omdbapi.com/",
+        params={"apikey": OMDB_KEY, "s": letter, "type": "movie"},
+        timeout=10,
+    ).json()
 
-def sheet_get(name):
-    r = sheets.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=f"{name}!A1:Z",
-    ).execute()
-    return r.get("values", [])
+    if "Search" not in r:
+        return "Не удалось найти фильм 😢"
 
-# ========= UTILS =========
-def now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
+    m = random.choice(r["Search"])
 
-def extract_mentions(text: str):
-    return re.findall(r'@\w+', text)
+    info = requests.get(
+        "http://www.omdbapi.com/",
+        params={"apikey": OMDB_KEY, "i": m["imdbID"], "plot": "short"},
+        timeout=10,
+    ).json()
 
-async def reply(update: Update, text: str, **kw):
-    await update.effective_message.reply_text(text, **kw)
+    return (
+        f"🎬 *{info.get('Title')}* ({info.get('Year')})\n"
+        f"⭐ IMDb: {info.get('imdbRating')}\n"
+        f"🎭 Жанр: {info.get('Genre')}\n\n"
+        f"📝 {info.get('Plot')}"
+    )
 
-# ========= SPOONACULAR =========
-def get_random_recipe():
-    url = "https://api.spoonacular.com/recipes/random"
-    params = {"apiKey": SPOON_KEY, "number": 1}
-    r = requests.get(url, params=params, timeout=10).json()
+# ========= COOKING (SPOONACULAR) =========
+def get_recipe():
+    r = requests.get(
+        "https://api.spoonacular.com/recipes/random",
+        params={"apiKey": SPOON_KEY, "number": 1},
+        timeout=10,
+    ).json()
+
     recipe = r["recipes"][0]
 
     ingredients = "\n".join(
@@ -98,56 +90,76 @@ def get_random_recipe():
         f"📖 Инструкция:\n{recipe.get('instructions','—')}"
     )
 
-# ========= KEYBOARDS =========
-def main_kb():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛒 Покупки", callback_data="shop")],
-        [InlineKeyboardButton("⏰ Напоминания", callback_data="remind")],
-        [InlineKeyboardButton("🎬 Фильм", callback_data="movie")],
-        [InlineKeyboardButton("🍳 Что приготовить", callback_data="food")],
-        [InlineKeyboardButton("🎲 Досуг", callback_data="fun")],
-        [InlineKeyboardButton("🧹 Дом", callback_data="home")],
-    ])
+# ========= GO OUT =========
+def where_to_go():
+    ideas = [
+        "🌌 Съездить смотреть звёзды за город",
+        "🎭 Иммерсивный театр или квест",
+        "🍷 Дегустация вина / кофе",
+        "🎨 Арт-пространство или выставка",
+        "🧘 Йога на природе",
+        "🚴 Веломаршрут по новым местам",
+        "📸 Фото-прогулка по красивым локациям",
+        "🎲 Антикафе с настолками",
+        "🎤 Стендап или открытый микрофон",
+        "🛶 Сап-борды или лодки",
+        "🏎 Картинг",
+        "🏹 Стрельба из лука",
+        "🍣 Мастер-класс по готовке",
+        "🎬 Кино под открытым небом",
+        "🧖 Спа-день"
+    ]
+    return random.choice(ideas)
 
-def back_kb():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Назад", callback_data="home")]
-    ])
+# ========= HOME FUN =========
+def home_fun():
+    ideas = [
+        "🎬 Устроить тематический киновечер",
+        "🍕 Приготовить новое блюдо вместе",
+        "🧩 Большой пазл или LEGO",
+        "🎮 Турнир по играм",
+        "📚 Час саморазвития",
+        "🧠 Настольные игры",
+        "🎧 Подкасты + уборка",
+        "🖼 Разобрать фотоархив",
+        "💡 Сделать перестановку",
+        "🛋 Обновить интерьер мелочами",
+        "📝 Планирование целей",
+        "🎨 Творческий вечер",
+        "💪 Домашняя тренировка",
+        "🧘 Медитация",
+        "📖 Совместное чтение"
+    ]
+    return random.choice(ideas)
 
-# ========= COMMANDS =========
+# ========= HOME TASKS =========
+def home_tasks():
+    tasks = [
+        "🧹 Генеральная уборка комнаты",
+        "🪟 Помыть окна",
+        "🛁 Глубокая чистка ванной",
+        "🍳 Разобрать кухонные шкафы",
+        "🧺 Стирка и сортировка вещей",
+        "👕 Разобрать гардероб",
+        "🗂 Навести порядок в документах",
+        "🔧 Починить мелкие поломки",
+        "🌿 Уход за растениями",
+        "🛒 Составить список покупок",
+        "💡 Проверить лампочки и батарейки",
+        "📦 Разобрать кладовку",
+        "🧼 Дезинфекция поверхностей",
+        "🛏 Смена постельного белья",
+        "🧯 Проверить безопасность дома"
+    ]
+    return random.choice(tasks)
+
+# ========= HANDLERS =========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await reply(update, "Семейный ассистент готов 👨‍👩‍👧", reply_markup=main_kb())
+    await update.message.reply_text(
+        "👨‍👩‍👧 Семейный ассистент готов",
+        reply_markup=main_kb()
+    )
 
-# ========= SHOPPING =========
-async def add_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    item = " ".join(context.args)
-    mentions = " ".join(extract_mentions(item))
-    sheet_append(SHEETS["shopping"], [[now_str(), item, "OPEN", mentions]])
-    await reply(update, f"🛒 Добавлено: {item}")
-
-# ========= REMINDERS =========
-async def remind(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if len(args) < 2:
-        await reply(update, "Формат: /remind 30m текст")
-        return
-
-    delay = int(args[0][:-1])
-    text = " ".join(args[1:])
-    mentions = " ".join(extract_mentions(text))
-
-    dt = datetime.now() + timedelta(minutes=delay)
-    sheet_append(SHEETS["reminders"], [[now_str(), dt.strftime("%Y-%m-%d %H:%M"), text, "OPEN", mentions]])
-
-    chat_id = update.effective_chat.id
-
-    async def job(ctx):
-        await ctx.bot.send_message(chat_id, f"⏰ Напоминание: {text}")
-
-    context.job_queue.run_once(job, when=delay * 60)
-    await reply(update, f"⏰ Напомню через {delay} мин")
-
-# ========= BUTTONS =========
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -156,36 +168,26 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d == "home":
         await q.message.reply_text("Меню:", reply_markup=main_kb())
 
-    elif d == "food":
-        recipe = get_random_recipe()
-        await q.message.reply_text(recipe, parse_mode="Markdown")
+    elif d == "movie":
+        await q.message.reply_text(get_random_movie(), parse_mode="Markdown")
 
-    elif d == "fun":
-        ideas = [
-            "🚶 Прогулка",
-            "🎲 Настольные игры",
-            "🎬 Кино",
-            "🍕 Заказать еду",
-            "🚴 Велопрогулка"
-        ]
-        await q.message.reply_text(random.choice(ideas))
+    elif d == "cook":
+        await q.message.reply_text(get_recipe(), parse_mode="Markdown")
 
-    elif d == "home":
-        tasks = [
-            "🧹 Пропылесосить",
-            "🪟 Помыть окна",
-            "🛁 Уборка ванной",
-            "🧺 Стирка"
-        ]
-        await q.message.reply_text(random.choice(tasks))
+    elif d == "go_out":
+        await q.message.reply_text(where_to_go(), reply_markup=back_kb())
+
+    elif d == "home_fun":
+        await q.message.reply_text(home_fun(), reply_markup=back_kb())
+
+    elif d == "home_tasks":
+        await q.message.reply_text(home_tasks(), reply_markup=back_kb())
 
 # ========= MAIN =========
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("buy", add_buy))
-    app.add_handler(CommandHandler("remind", remind))
     app.add_handler(CallbackQueryHandler(buttons))
 
     print("Bot started")
