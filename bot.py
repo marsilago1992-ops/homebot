@@ -59,7 +59,7 @@ def prod_kb():
 # ===== REMINDERS =====
 def rem_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Создать", callback_data="rem_add")],
+        [InlineKeyboardButton("➕ Создать", callback_data="rem_create")],
         [InlineKeyboardButton("📋 Список", callback_data="rem_list")],
         [InlineKeyboardButton("❌ Удалить", callback_data="rem_del")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
@@ -119,6 +119,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = "PROD_ADD"
         await q.message.reply_text("Напиши продукт одним сообщением")
 
+    
+    elif data == "prod_list":
+        if not PRODUCTS:
+            await q.message.reply_text("Список пуст")
+        else:
+            txt="\n".join([f"• {p}" for p in PRODUCTS])
+            await q.message.reply_text(f"🛒 Список продуктов:\n{txt}")
     elif data == "prod_done":
         if not PRODUCTS:
             await q.message.reply_text("Список пуст")
@@ -144,6 +151,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== HOME =====
     elif data == "home_add":
+        context.user_data["mode"]="HOME_ADD"
         context.user_data["mode"] = "HOME_ADD"
         await q.message.reply_text("Напиши план по дому")
 
