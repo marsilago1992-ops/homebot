@@ -59,7 +59,7 @@ def prod_kb():
 # ===== REMINDERS =====
 def rem_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Создать", callback_data="rem_add")],
+        [InlineKeyboardButton("➕ Создать", callback_data="rem_create")],
         [InlineKeyboardButton("📋 Список", callback_data="rem_list")],
         [InlineKeyboardButton("❌ Удалить", callback_data="rem_del")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
@@ -68,8 +68,12 @@ def rem_kb():
 # ===== MOVIES =====
 def film_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎬 Рекомендовать фильм", callback_data="film_pick")],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
+        [InlineKeyboardButton("🎲 Случайный фильм", callback_data="film_pick")],
+        [InlineKeyboardButton("😊 Легкое настроение", callback_data="film_mood:light"),
+         InlineKeyboardButton("🤯 Думать", callback_data="film_mood:smart")],
+        [InlineKeyboardButton("😂 Комедия", callback_data="film_genre:Comedy"),
+         InlineKeyboardButton("🚀 Фантастика", callback_data="film_genre:Sci-Fi")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="menu")]
     ])
 
 # ===== COOK =====
@@ -157,6 +161,12 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ===== MOVIE PICK =====
     elif data == "film_pick":
         await send_movie(q)
+    elif data.startswith("film_mood:"):
+        mood = data.split(":")[1]
+        await send_movie(q, mood=mood)
+    elif data.startswith("film_genre:"):
+        genre = data.split(":")[1]
+        await send_movie(q, genre=genre)
 
     # ===== COOK PICK =====
     elif data == "cook_pick":
@@ -169,6 +179,18 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             txt = "\n".join([f"• {p}" for p in PRODUCTS])
             await q.message.reply_text(f"🛒 Продукты:\n{txt}")
+
+
+# ===== TRANSLATE =====
+def translate_ru(text):
+    try:
+        resp = requests.get("https://translate.googleapis.com/translate_a/single", params={
+            "client":"gtx","sl":"auto","tl":"ru","dt":"t","q":text
+        }).json()
+        return "".join([t[0] for t in resp[0]])
+    except:
+        return text
+
 
 # ===== MOVIE =====
 async def send_movie(q):
@@ -219,7 +241,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Добавлено")
 
     elif mode == "REM_CREATE":
-        REMINDERS.append(txt)
+        REMINDERS.append(text)
         context.user_data.clear()
         await update.message.reply_text("Напоминание создано")
 
