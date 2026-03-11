@@ -399,7 +399,7 @@ async def on_buttons(update, context):
     await q.answer()
 
     # ===== КЛИК ПО ДАТЕ В КАЛЕНДАРЕ =====
-   if data.startswith("cal:"):
+    if data.startswith("cal:"):
         parts = data.split(":")
         date_str = parts[2]   # было [1]
         context.user_data["remind_date"] = date_str
@@ -689,6 +689,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
