@@ -4,7 +4,11 @@ import asyncio
 import random
 import requests
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -26,7 +30,7 @@ if not TOKEN:
 
 # ===== SIMPLE STORAGE =====
 PRODUCTS = []
-REMINDERS = []  # dict: {"text": str, "dt": datetime}
+REMINDERS = []
 HOME_PLANS = []
 
 # ===== UI =====
@@ -48,40 +52,18 @@ def prod_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Добавить", callback_data="prod_add")],
         [InlineKeyboardButton("📋 Список", callback_data="prod_list")],
-        [InlineKeyboardButton("✅ Куплено всё", callback_data="prod_done")],
+        [InlineKeyboardButton("✅ Куплено", callback_data="prod_done")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
     ])
 
 # ===== REMINDERS =====
 def rem_kb():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Создать", callback_data="rem_create")],
+        [InlineKeyboardButton("➕ Создать", callback_data="rem_add")],
         [InlineKeyboardButton("📋 Список", callback_data="rem_list")],
-        [InlineKeyboardButton("❌ Удалить все", callback_data="rem_del")],
+        [InlineKeyboardButton("❌ Удалить", callback_data="rem_del")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
     ])
-
-def days_kb():
-    rows = []
-    today = datetime.now().date()
-    btns = []
-    for i in range(7):
-        d = today + timedelta(days=i)
-        btns.append(InlineKeyboardButton(d.strftime("%d.%m"), callback_data=f"rem_day:{d.isoformat()}"))
-        if len(btns) == 4:
-            rows.append(btns)
-            btns = []
-    if btns:
-        rows.append(btns)
-    rows.append([InlineKeyboardButton("⬅️ Назад", callback_data="rem")])
-    return InlineKeyboardMarkup(rows)
-
-def hours_kb():
-    rows = []
-    for h in [9, 12, 15, 18, 21]:
-        rows.append([InlineKeyboardButton(f"{h:02d}:00", callback_data=f"rem_hour:{h:02d}:00")])
-    rows.append([InlineKeyboardButton("⬅️ Назад", callback_data="rem")])
-    return InlineKeyboardMarkup(rows)
 
 # ===== MOVIES =====
 def film_kb():
@@ -102,7 +84,8 @@ def home_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Добавить план", callback_data="home_add")],
         [InlineKeyboardButton("📋 Планы", callback_data="home_list")],
-        [InlineKeyboardButton("❌ Удалить все", callback_data="home_del")],
+        [InlineKeyboardButton("✏️ Редактировать", callback_data="home_edit")],
+        [InlineKeyboardButton("❌ Удалить", callback_data="home_del")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
     ])
 
@@ -130,79 +113,21 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "home":
         await q.message.reply_text("Дом:", reply_markup=home_kb())
 
-    # ===== PRODUCTS =====
-    elif data == "prod_add":
-        context.user_data["mode"] = "PROD_ADD"
-        await q.message.reply_text("Напиши продукт одним сообщением (можно тегать @человека)")
+    # ===== MOVIE PICK =====
+    elif data == "film_pick":
+        await send_movie(q)
 
+    # ===== COOK PICK =====
+    elif data == "cook_pick":
+        await send_recipe(q)
+
+    # ===== PRODUCT LIST =====
     elif data == "prod_list":
         if not PRODUCTS:
             await q.message.reply_text("Список пуст")
         else:
             txt = "\n".join([f"• {p}" for p in PRODUCTS])
-            await q.message.reply_text(f"🛒 Список продуктов:\n{txt}")
-
-    elif data == "prod_done":
-        PRODUCTS.clear()
-        await q.message.reply_text("Список очищен")
-
-    # ===== REMINDERS =====
-    elif data == "rem_create":
-        context.user_data.clear()
-        await q.message.reply_text("📅 Выбери дату:", reply_markup=days_kb())
-
-    elif data.startswith("rem_day:"):
-        day = data.split(":")[1]
-        context.user_data["rem_day"] = day
-        await q.message.reply_text("🕒 Выбери время:", reply_markup=hours_kb())
-
-    elif data.startswith("rem_hour:"):
-        hour = data.split(":")[1]
-        day = context.user_data.get("rem_day")
-        if not day:
-            await q.message.reply_text("Ошибка даты")
-            return
-        dt = datetime.strptime(f"{day} {hour}", "%Y-%m-%d %H:%M")
-        context.user_data["rem_dt"] = dt
-        context.user_data["mode"] = "REM_TEXT"
-        await q.message.reply_text("✏️ Напиши текст напоминания (можно тегать @человека)")
-
-    elif data == "rem_list":
-        if not REMINDERS:
-            await q.message.reply_text("Напоминаний нет")
-        else:
-            lines = []
-            for r in REMINDERS:
-                lines.append(f"• {r['dt'].strftime('%d.%m %H:%M')} — {r['text']}")
-            await q.message.reply_text("⏰ Напоминания:\n" + "\n".join(lines))
-
-    elif data == "rem_del":
-        REMINDERS.clear()
-        await q.message.reply_text("Напоминания удалены")
-
-    # ===== HOME =====
-    elif data == "home_add":
-        context.user_data["mode"] = "HOME_ADD"
-        await q.message.reply_text("Напиши план по дому (можно тегать @человека)")
-
-    elif data == "home_list":
-        if not HOME_PLANS:
-            await q.message.reply_text("Планов нет")
-        else:
-            txt = "\n".join([f"• {h}" for h in HOME_PLANS])
-            await q.message.reply_text(f"🏠 Планы:\n{txt}")
-
-    elif data == "home_del":
-        HOME_PLANS.clear()
-        await q.message.reply_text("Планы удалены")
-
-    # ===== MOVIES =====
-    elif data == "film_pick":
-        await send_movie(q)
-
-    # ===== COOK =====
-    elif data == "cook_pick":
-        await send_recipe(q)
+            await q.message.reply_text(f"🛒 Продукты:\n{txt}")
 
 # ===== MOVIE =====
 async def send_movie(q):
@@ -224,7 +149,7 @@ async def send_movie(q):
             await q.message.reply_photo(poster, caption=text)
         else:
             await q.message.reply_text(text)
-    except Exception as e:
+    except:
         await q.message.reply_text("Ошибка фильма")
 
 # ===== RECIPE =====
@@ -241,36 +166,11 @@ async def send_recipe(q):
     except:
         await q.message.reply_text("Ошибка рецепта")
 
-# ===== TEXT HANDLER =====
-async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    mode = context.user_data.get("mode")
-    txt = update.message.text.strip()
-
-    if mode == "PROD_ADD":
-        PRODUCTS.append(txt)
-        context.user_data.clear()
-        await update.message.reply_text("Добавлено")
-
-    elif mode == "REM_TEXT":
-        dt = context.user_data.get("rem_dt")
-        if not dt:
-            await update.message.reply_text("Ошибка времени")
-            return
-        REMINDERS.append({"text": txt, "dt": dt})
-        context.user_data.clear()
-        await update.message.reply_text("Напоминание создано")
-
-    elif mode == "HOME_ADD":
-        HOME_PLANS.append(txt)
-        context.user_data.clear()
-        await update.message.reply_text("План добавлен")
-
 # ===== MAIN =====
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     print("Bot running...")
     app.run_polling()
 
