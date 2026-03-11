@@ -113,6 +113,47 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "home":
         await q.message.reply_text("Дом:", reply_markup=home_kb())
 
+    
+    # ===== PRODUCT ADD =====
+    elif data == "prod_add":
+        context.user_data["mode"] = "PROD_ADD"
+        await q.message.reply_text("Напиши продукт одним сообщением")
+
+    elif data == "prod_done":
+        if not PRODUCTS:
+            await q.message.reply_text("Список пуст")
+        else:
+            PRODUCTS.clear()
+            await q.message.reply_text("Список очищен")
+
+    # ===== REMINDERS =====
+    elif data == "rem_create":
+        context.user_data["mode"] = "REM_CREATE"
+        await q.message.reply_text("Напиши напоминание текстом")
+
+    elif data == "rem_list":
+        if not REMINDERS:
+            await q.message.reply_text("Напоминаний нет")
+        else:
+            txt = "\n".join([f"• {r}" for r in REMINDERS])
+            await q.message.reply_text(f"⏰ Напоминания:\n{txt}")
+
+    elif data == "rem_del":
+        REMINDERS.clear()
+        await q.message.reply_text("Напоминания удалены")
+
+    # ===== HOME =====
+    elif data == "home_add":
+        context.user_data["mode"] = "HOME_ADD"
+        await q.message.reply_text("Напиши план по дому")
+
+    elif data == "home_list":
+        if not HOME_PLANS:
+            await q.message.reply_text("Планов нет")
+        else:
+            txt = "\n".join([f"• {h}" for h in HOME_PLANS])
+            await q.message.reply_text(f"🏠 Планы:\n{txt}")
+
     # ===== MOVIE PICK =====
     elif data == "film_pick":
         await send_movie(q)
@@ -166,11 +207,33 @@ async def send_recipe(q):
     except:
         await q.message.reply_text("Ошибка рецепта")
 
+
+# ===== TEXT HANDLER =====
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = context.user_data.get("mode")
+    txt = update.message.text.strip()
+
+    if mode == "PROD_ADD":
+        PRODUCTS.append(txt)
+        context.user_data.clear()
+        await update.message.reply_text("Добавлено")
+
+    elif mode == "REM_CREATE":
+        REMINDERS.append(txt)
+        context.user_data.clear()
+        await update.message.reply_text("Напоминание создано")
+
+    elif mode == "HOME_ADD":
+        HOME_PLANS.append(txt)
+        context.user_data.clear()
+        await update.message.reply_text("План добавлен")
+
 # ===== MAIN =====
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     print("Bot running...")
     app.run_polling()
 
