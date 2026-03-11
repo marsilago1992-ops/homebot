@@ -527,6 +527,7 @@ async def on_buttons(update, context):
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("TEXT HANDLER TRIGGERED", flush=True)
     print("USER_DATA:", context.user_data, flush=True)
+    print("MODE =", mode, flush=True)
 
     ensure_headers()
 
@@ -688,6 +689,7 @@ if __name__ == "__main__":
     print("BOOT: entering main()", flush=True)
     main()
     print("BOOT: main started", flush=True)
+
 
 
 
