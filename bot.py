@@ -2,7 +2,7 @@ import os
 import calendar
 import random
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -23,9 +23,6 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 OMDB_KEY = os.getenv("OMDB_API_KEY")
 SPOON_KEY = os.getenv("SPOONACULAR_KEY")
-
-if not TOKEN or not SPREADSHEET_ID:
-    raise RuntimeError("ENV VARS MISSING")
 
 # ========= GOOGLE SHEETS =========
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -53,6 +50,14 @@ def sheet_get(sheet):
     ).execute()
     return r.get("values", [])
 
+def sheet_update(sheet, row, col, value):
+    sheets.spreadsheets().values().update(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{sheet}!{col}{row}",
+        valueInputOption="USER_ENTERED",
+        body={"values": [[value]]},
+    ).execute()
+
 # ========= UI =========
 def main_kb():
     return InlineKeyboardMarkup([
@@ -60,7 +65,7 @@ def main_kb():
         [InlineKeyboardButton("⏰ Напоминания", callback_data="remind")],
         [InlineKeyboardButton("🎬 Фильм", callback_data="movie")],
         [InlineKeyboardButton("🍳 Что приготовить", callback_data="cook")],
-        [InlineKeyboardButton("🏠 Дом", callback_data="home")],
+        [InlineKeyboardButton("🏠 Дом", callback_data="house")],
     ])
 
 def back_kb():
@@ -70,8 +75,7 @@ def back_kb():
 def calendar_kb(year, month):
     kb = []
     kb.append([InlineKeyboardButton(f"{calendar.month_name[month]} {year}", callback_data="ignore")])
-    days = ["Mo","Tu","We","Th","Fr","Sa","Su"]
-    kb.append([InlineKeyboardButton(d, callback_data="ignore") for d in days])
+    kb.append([InlineKeyboardButton(d, callback_data="ignore") for d in ["Mo","Tu","We","Th","Fr","Sa","Su"]])
 
     for week in calendar.monthcalendar(year, month):
         row=[]
@@ -83,14 +87,11 @@ def calendar_kb(year, month):
                 row.append(InlineKeyboardButton(str(d), callback_data=f"date:{date}"))
         kb.append(row)
 
-    kb.append([InlineKeyboardButton("⬅️ Назад", callback_data="home")])
     return InlineKeyboardMarkup(kb)
 
 def time_kb():
-    kb=[]
     hours=[9,12,15,18,21]
-    for h in hours:
-        kb.append([InlineKeyboardButton(f"{h:02d}:00", callback_data=f"time:{h:02d}:00")])
+    kb=[[InlineKeyboardButton(f"{h:02d}:00", callback_data=f"time:{h:02d}:00")] for h in hours]
     kb.append([InlineKeyboardButton("⬅️ Назад", callback_data="home")])
     return InlineKeyboardMarkup(kb)
 
@@ -104,12 +105,8 @@ def random_movie():
             "y":year,
             "s":"love"
         }).json()
-        if "Search" not in r:
-            return "❌ Фильм не найден"
         m=random.choice(r["Search"])
-        d=requests.get("http://www.omdbapi.com/",params={
-            "apikey":OMDB_KEY,"i":m["imdbID"]
-        }).json()
+        d=requests.get("http://www.omdbapi.com/",params={"apikey":OMDB_KEY,"i":m["imdbID"]}).json()
         return f"🎬 {d['Title']} ({d['Year']})\n⭐ {d.get('imdbRating','?')}\n{d.get('Plot','')}"
     except:
         return "❌ Ошибка сервиса фильмов"
@@ -133,18 +130,59 @@ async def buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
     d=q.data
     await q.answer()
 
+    # ===== HOME =====
     if d=="home":
         await q.message.reply_text("Главное меню:",reply_markup=main_kb())
 
+    # ===== SHOP =====
     elif d=="shop":
+        kb=InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Добавить продукт",callback_data="shop_add")],
+            [InlineKeyboardButton("📋 Список продуктов",callback_data="shop_list")],
+            [InlineKeyboardButton("✅ Отметить купленные",callback_data="shop_done")],
+            [InlineKeyboardButton("⬅️ Назад",callback_data="home")]
+        ])
+        await q.message.reply_text("🛒 Продукты:",reply_markup=kb)
+
+    elif d=="shop_list":
         rows=sheet_get("Shopping")
-        if len(rows)<=1:
+        items=[r for r in rows[1:] if len(r)>=3 and r[2]=="OPEN"]
+        if not items:
             txt="Список пуст"
         else:
-            txt="\n".join("• "+r[1] for r in rows[1:])
-        await q.message.reply_text("🛒 Продукты:\n"+txt,reply_markup=back_kb())
+            txt="\n".join("• "+r[1] for r in items)
+        await q.message.reply_text(txt)
 
+    elif d=="shop_done":
+        rows=sheet_get("Shopping")
+        for i,r in enumerate(rows[1:],start=2):
+            if len(r)>=3 and r[2]=="OPEN":
+                sheet_update("Shopping",i,"C","DONE")
+        await q.message.reply_text("✅ Купленные отмечены")
+
+    elif d=="shop_add":
+        context.user_data["mode"]="shop_add"
+        await q.message.reply_text("Напиши название продукта")
+
+    # ===== REMIND =====
     elif d=="remind":
+        kb=InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Создать напоминание",callback_data="rem_add")],
+            [InlineKeyboardButton("📋 Список напоминаний",callback_data="rem_list")],
+            [InlineKeyboardButton("⬅️ Назад",callback_data="home")]
+        ])
+        await q.message.reply_text("⏰ Напоминания:",reply_markup=kb)
+
+    elif d=="rem_list":
+        rows=sheet_get("Reminders")
+        items=[r for r in rows[1:] if len(r)>=4 and r[3]=="OPEN"]
+        if not items:
+            txt="Нет активных напоминаний"
+        else:
+            txt="\n".join(f"• {r[1]} — {r[2]}" for r in items)
+        await q.message.reply_text(txt)
+
+    elif d=="rem_add":
         now=datetime.now()
         await q.message.reply_text("📅 Выбери дату:",reply_markup=calendar_kb(now.year,now.month))
 
@@ -157,25 +195,57 @@ async def buttons(update:Update,context:ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"]="rem_text"
         await q.message.reply_text("✍️ Напиши текст напоминания")
 
+    # ===== MOVIE =====
     elif d=="movie":
         await q.message.reply_text(random_movie(),reply_markup=back_kb())
 
+    # ===== COOK =====
     elif d=="cook":
         await q.message.reply_text(random_recipe(),reply_markup=back_kb())
 
-    elif d=="home":
+    # ===== HOUSE =====
+    elif d=="house":
+        kb=InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Добавить план",callback_data="house_add")],
+            [InlineKeyboardButton("📋 Список планов",callback_data="house_list")],
+            [InlineKeyboardButton("⬅️ Назад",callback_data="home")]
+        ])
+        await q.message.reply_text("🏠 Дом:",reply_markup=kb)
+
+    elif d=="house_list":
         rows=sheet_get("Home")
         if len(rows)<=1:
             txt="Планов нет"
         else:
             txt="\n".join("• "+r[1] for r in rows[1:])
-        await q.message.reply_text("🏠 Планы по дому:\n"+txt,reply_markup=back_kb())
+        await q.message.reply_text(txt)
 
+    elif d=="house_add":
+        context.user_data["mode"]="house_add"
+        await q.message.reply_text("Напиши план по дому")
+
+# ========= TEXT =========
 async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
     txt=update.message.text.strip()
     mode=context.user_data.get("mode")
 
-    # напоминание текст
+    # add product
+    if mode=="shop_add":
+        user=update.effective_user.full_name
+        sheet_append("Shopping",[[datetime.now().strftime("%Y-%m-%d %H:%M"),txt,"OPEN",user]])
+        context.user_data.clear()
+        await update.message.reply_text("✅ Добавлено")
+        return
+
+    # add house plan
+    if mode=="house_add":
+        user=update.effective_user.full_name
+        sheet_append("Home",[[datetime.now().strftime("%Y-%m-%d %H:%M"),txt,user]])
+        context.user_data.clear()
+        await update.message.reply_text("✅ План добавлен")
+        return
+
+    # reminder text
     if mode=="rem_text":
         date=context.user_data.get("date")
         time=context.user_data.get("time")
@@ -192,23 +262,7 @@ async def text_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
         context.job_queue.run_once(job,delay)
         context.user_data.clear()
-        await update.message.reply_text("✅ Напоминание создано",reply_markup=main_kb())
-        return
-
-    # продукты
-    if txt.lower().startswith("купить "):
-        item=txt[7:]
-        user=update.effective_user.full_name
-        sheet_append("Shopping",[[datetime.now().strftime("%Y-%m-%d %H:%M"),item,"OPEN",user]])
-        await update.message.reply_text("Добавлено в покупки",reply_markup=main_kb())
-        return
-
-    # планы дома
-    if txt.lower().startswith("дом "):
-        plan=txt[4:]
-        user=update.effective_user.full_name
-        sheet_append("Home",[[datetime.now().strftime("%Y-%m-%d %H:%M"),plan,user]])
-        await update.message.reply_text("План добавлен",reply_markup=main_kb())
+        await update.message.reply_text("✅ Напоминание создано")
         return
 
 # ========= MAIN =========
