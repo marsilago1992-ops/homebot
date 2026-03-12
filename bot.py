@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup,  # Исправлено: было InlineKeyboardMarkay
+    InlineKeyboardMarkup,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -208,37 +208,6 @@ def translate_to_russian(text):
         logging.error(f"Ошибка перевода: {e}")
         return text
 
-def parse_ingredient(ingredient_string):
-    """Парсит строку ингредиента на количество, единицу измерения и название"""
-    # Сначала пробуем найти количество (число в начале)
-    ingredient_string = ingredient_string.strip()
-    
-    # Паттерн для поиска числа в начале (поддерживает дроби и десятичные)
-    number_match = re.match(r'^([\d\s\.,/]+)\s+(.*)$', ingredient_string)
-    
-    if number_match:
-        amount = number_match.group(1).strip()
-        rest = number_match.group(2).strip()
-        
-        # Ищем единицу измерения в оставшейся части
-        measure_patterns = [
-            r'^(tsp|teaspoon|teaspoons|tbsp|tablespoon|tablespoons|cup|cups|oz|ounce|ounces|lb|pound|pounds|g|gram|grams|kg|kilogram|kilograms|ml|milliliter|milliliters|l|liter|liters|pinch|pinches|dash|dashes|clove|cloves|piece|pieces|slice|slices|can|cans|package|packages|bunch|bunches)\s+(.*)$',
-            r'^(small|medium|large)\s+(.*)$',  # размер
-        ]
-        
-        for pattern in measure_patterns:
-            measure_match = re.match(pattern, rest, re.IGNORECASE)
-            if measure_match:
-                measure = measure_match.group(1)
-                name = measure_match.group(2)
-                return amount, measure, name
-        
-        # Если не нашли единицу измерения, значит это просто название
-        return amount, "", rest
-    
-    # Если нет числа в начале, значит это просто название
-    return "", "", ingredient_string
-
 def translate_measurement(measure):
     """Переводит единицы измерения на русский"""
     if not measure:
@@ -247,70 +216,25 @@ def translate_measurement(measure):
     measure_lower = measure.lower().strip()
     
     measurements = {
-        # Чайные ложки
-        'tsp': 'ч.л.',
-        'teaspoon': 'ч.л.',
-        'teaspoons': 'ч.л.',
-        
-        # Столовые ложки
-        'tbsp': 'ст.л.',
-        'tablespoon': 'ст.л.',
-        'tablespoons': 'ст.л.',
-        
-        # Стаканы
-        'cup': 'стакан',
-        'cups': 'стакана',
-        
-        # Унции
-        'oz': 'унция',
-        'ounce': 'унция',
-        'ounces': 'унций',
-        
-        # Фунты
-        'lb': 'фунт',
-        'pound': 'фунт',
-        'pounds': 'фунтов',
-        
-        # Граммы и килограммы
-        'g': 'г',
-        'gram': 'г',
-        'grams': 'г',
-        'kg': 'кг',
-        'kilogram': 'кг',
-        'kilograms': 'кг',
-        
-        # Миллилитры и литры
-        'ml': 'мл',
-        'milliliter': 'мл',
-        'milliliters': 'мл',
-        'l': 'л',
-        'liter': 'л',
-        'liters': 'л',
-        
-        # Размеры
-        'small': 'маленький',
-        'medium': 'средний',
-        'large': 'большой',
-        
-        # Прочее
-        'pinch': 'щепотка',
-        'pinches': 'щепотки',
-        'dash': 'капля',
-        'dashes': 'капли',
-        'clove': 'зубчик',
-        'cloves': 'зубчика',
-        'piece': 'шт',
-        'pieces': 'шт',
-        'slice': 'ломтик',
-        'slices': 'ломтика',
-        'can': 'банка',
-        'cans': 'банки',
-        'package': 'упаковка',
-        'packages': 'упаковки',
-        'bunch': 'пучок',
-        'bunches': 'пучка',
-        'to': 'по',  # для "to taste"
-        'taste': 'вкусу'
+        'tsp': 'ч.л.', 'teaspoon': 'ч.л.', 'teaspoons': 'ч.л.',
+        'tbsp': 'ст.л.', 'tablespoon': 'ст.л.', 'tablespoons': 'ст.л.',
+        'cup': 'стакан', 'cups': 'стакана',
+        'oz': 'унция', 'ounce': 'унция', 'ounces': 'унций',
+        'lb': 'фунт', 'pound': 'фунт', 'pounds': 'фунтов',
+        'g': 'г', 'gram': 'г', 'grams': 'г',
+        'kg': 'кг', 'kilogram': 'кг', 'kilograms': 'кг',
+        'ml': 'мл', 'milliliter': 'мл', 'milliliters': 'мл',
+        'l': 'л', 'liter': 'л', 'liters': 'л',
+        'small': 'маленький', 'medium': 'средний', 'large': 'большой',
+        'pinch': 'щепотка', 'pinches': 'щепотки',
+        'dash': 'капля', 'dashes': 'капли',
+        'clove': 'зубчик', 'cloves': 'зубчика',
+        'piece': 'шт', 'pieces': 'шт',
+        'slice': 'ломтик', 'slices': 'ломтика',
+        'can': 'банка', 'cans': 'банки',
+        'package': 'упаковка', 'packages': 'упаковки',
+        'bunch': 'пучок', 'bunches': 'пучка',
+        'to': 'по', 'taste': 'вкусу'
     }
     
     return measurements.get(measure_lower, measure)
@@ -322,188 +246,77 @@ def translate_ingredient_name(name):
     
     name_lower = name.lower().strip()
     
-    # Словарь распространенных ингредиентов
     ingredients_dict = {
-        # Мука и крупы
-        'flour': 'мука',
-        'all-purpose flour': 'мука универсальная',
-        'bread flour': 'мука для хлеба',
-        'whole wheat flour': 'цельнозерновая мука',
-        'rice': 'рис',
-        'pasta': 'паста',
-        'noodles': 'лапша',
-        'oat': 'овес',
-        'oats': 'овсяные хлопья',
-        'cereal': 'хлопья',
-        
-        # Сахар и подсластители
-        'sugar': 'сахар',
-        'brown sugar': 'коричневый сахар',
-        'powdered sugar': 'сахарная пудра',
-        'honey': 'мед',
-        'syrup': 'сироп',
-        'maple syrup': 'кленовый сироп',
-        
-        # Соль и специи
-        'salt': 'соль',
-        'pepper': 'перец',
-        'black pepper': 'черный перец',
-        'cinnamon': 'корица',
-        'vanilla': 'ваниль',
+        'flour': 'мука', 'all-purpose flour': 'мука универсальная',
+        'bread flour': 'мука для хлеба', 'whole wheat flour': 'цельнозерновая мука',
+        'rice': 'рис', 'pasta': 'паста', 'noodles': 'лапша',
+        'oats': 'овсяные хлопья', 'cereal': 'хлопья',
+        'sugar': 'сахар', 'brown sugar': 'коричневый сахар',
+        'powdered sugar': 'сахарная пудра', 'honey': 'мед',
+        'syrup': 'сироп', 'maple syrup': 'кленовый сироп',
+        'salt': 'соль', 'pepper': 'перец', 'black pepper': 'черный перец',
+        'cinnamon': 'корица', 'vanilla': 'ваниль',
         'vanilla extract': 'ванильный экстракт',
-        'garlic powder': 'чесночный порошок',
-        'onion powder': 'луковый порошок',
-        'paprika': 'паприка',
-        'oregano': 'орегано',
-        'basil': 'базилик',
-        'thyme': 'тимьян',
-        'rosemary': 'розмарин',
-        'cumin': 'кумин',
-        'turmeric': 'куркума',
-        'ginger': 'имбирь',
-        'nutmeg': 'мускатный орех',
-        
-        # Масла и жиры
-        'butter': 'сливочное масло',
-        'unsalted butter': 'несоленое сливочное масло',
-        'oil': 'растительное масло',
-        'olive oil': 'оливковое масло',
-        'vegetable oil': 'растительное масло',
-        'coconut oil': 'кокосовое масло',
-        
-        # Молочные продукты
-        'milk': 'молоко',
-        'cream': 'сливки',
-        'heavy cream': 'жирные сливки',
-        'sour cream': 'сметана',
-        'yogurt': 'йогурт',
-        'cheese': 'сыр',
-        'cheddar': 'чеддер',
-        'parmesan': 'пармезан',
-        'mozzarella': 'моцарелла',
-        'cream cheese': 'сливочный сыр',
-        'egg': 'яйцо',
-        'eggs': 'яйца',
-        
-        # Мясо и рыба
-        'chicken': 'курица',
-        'chicken breast': 'куриная грудка',
-        'chicken thigh': 'куриное бедро',
-        'beef': 'говядина',
-        'ground beef': 'говяжий фарш',
-        'pork': 'свинина',
-        'bacon': 'бекон',
-        'sausage': 'колбаса',
-        'fish': 'рыба',
-        'salmon': 'лосось',
-        'tuna': 'тунец',
+        'garlic powder': 'чесночный порошок', 'onion powder': 'луковый порошок',
+        'paprika': 'паприка', 'oregano': 'орегано', 'basil': 'базилик',
+        'thyme': 'тимьян', 'rosemary': 'розмарин', 'cumin': 'кумин',
+        'turmeric': 'куркума', 'ginger': 'имбирь', 'nutmeg': 'мускатный орех',
+        'butter': 'сливочное масло', 'unsalted butter': 'несоленое сливочное масло',
+        'oil': 'растительное масло', 'olive oil': 'оливковое масло',
+        'vegetable oil': 'растительное масло', 'coconut oil': 'кокосовое масло',
+        'milk': 'молоко', 'cream': 'сливки', 'heavy cream': 'жирные сливки',
+        'sour cream': 'сметана', 'yogurt': 'йогурт',
+        'cheese': 'сыр', 'cheddar': 'чеддер', 'parmesan': 'пармезан',
+        'mozzarella': 'моцарелла', 'cream cheese': 'сливочный сыр',
+        'egg': 'яйцо', 'eggs': 'яйца',
+        'chicken': 'курица', 'chicken breast': 'куриная грудка',
+        'chicken thigh': 'куриное бедро', 'beef': 'говядина',
+        'ground beef': 'говяжий фарш', 'pork': 'свинина',
+        'bacon': 'бекон', 'sausage': 'колбаса',
+        'fish': 'рыба', 'salmon': 'лосось', 'tuna': 'тунец',
         'shrimp': 'креветки',
-        
-        # Овощи
-        'onion': 'лук',
-        'onions': 'лук',
-        'garlic': 'чеснок',
-        'tomato': 'помидор',
-        'tomatoes': 'помидоры',
-        'potato': 'картофель',
-        'potatoes': 'картофель',
-        'carrot': 'морковь',
-        'carrots': 'морковь',
-        'celery': 'сельдерей',
-        'bell pepper': 'болгарский перец',
-        'mushroom': 'гриб',
-        'mushrooms': 'грибы',
-        'spinach': 'шпинат',
-        'broccoli': 'брокколи',
-        'cauliflower': 'цветная капуста',
-        'zucchini': 'цуккини',
-        'cucumber': 'огурец',
-        'lettuce': 'салат',
-        'cabbage': 'капуста',
-        
-        # Фрукты
-        'apple': 'яблоко',
-        'apples': 'яблоки',
-        'banana': 'банан',
-        'bananas': 'бананы',
-        'lemon': 'лимон',
-        'lemons': 'лимоны',
-        'lime': 'лайм',
-        'orange': 'апельсин',
-        'oranges': 'апельсины',
-        'strawberry': 'клубника',
-        'strawberries': 'клубника',
-        'blueberry': 'голубика',
-        'blueberries': 'голубика',
-        'raspberry': 'малина',
-        'raspberries': 'малина',
-        
-        # Хлеб и выпечка
-        'bread': 'хлеб',
-        'bread crumbs': 'панировочные сухари',
-        'crust': 'корка',
+        'onion': 'лук', 'onions': 'лук', 'garlic': 'чеснок',
+        'tomato': 'помидор', 'tomatoes': 'помидоры',
+        'potato': 'картофель', 'potatoes': 'картофель',
+        'carrot': 'морковь', 'carrots': 'морковь',
+        'celery': 'сельдерей', 'bell pepper': 'болгарский перец',
+        'mushroom': 'гриб', 'mushrooms': 'грибы',
+        'spinach': 'шпинат', 'broccoli': 'брокколи',
+        'cauliflower': 'цветная капуста', 'zucchini': 'цуккини',
+        'cucumber': 'огурец', 'lettuce': 'салат', 'cabbage': 'капуста',
+        'apple': 'яблоко', 'apples': 'яблоки', 'banana': 'банан',
+        'bananas': 'бананы', 'lemon': 'лимон', 'lemons': 'лимоны',
+        'lime': 'лайм', 'orange': 'апельсин', 'oranges': 'апельсины',
+        'strawberry': 'клубника', 'strawberries': 'клубника',
+        'blueberry': 'голубика', 'blueberries': 'голубика',
+        'raspberry': 'малина', 'raspberries': 'малина',
+        'bread': 'хлеб', 'bread crumbs': 'панировочные сухари',
         'dough': 'тесто',
-        
-        # Соусы и заправки
-        'sauce': 'соус',
-        'ketchup': 'кетчуп',
-        'mustard': 'горчица',
-        'mayonnaise': 'майонез',
-        'vinegar': 'уксус',
-        'soy sauce': 'соевый соус',
-        'worcestershire sauce': 'соус ворчестер',
-        'hot sauce': 'острый соус',
-        
-        # Орехи и семена
-        'nuts': 'орехи',
-        'almond': 'миндаль',
-        'almonds': 'миндаль',
-        'walnut': 'грецкий орех',
-        'walnuts': 'грецкие орехи',
-        'peanut': 'арахис',
-        'peanuts': 'арахис',
-        'sesame': 'кунжут',
-        
-        # Напитки
-        'water': 'вода',
-        'broth': 'бульон',
-        'chicken broth': 'куриный бульон',
-        'beef broth': 'говяжий бульон',
+        'sauce': 'соус', 'ketchup': 'кетчуп', 'mustard': 'горчица',
+        'mayonnaise': 'майонез', 'vinegar': 'уксус',
+        'soy sauce': 'соевый соус', 'hot sauce': 'острый соус',
+        'nuts': 'орехи', 'almond': 'миндаль', 'walnut': 'грецкий орех',
+        'peanut': 'арахис', 'sesame': 'кунжут',
+        'water': 'вода', 'broth': 'бульон',
+        'chicken broth': 'куриный бульон', 'beef broth': 'говяжий бульон',
         'vegetable broth': 'овощной бульон',
-        'wine': 'вино',
-        'red wine': 'красное вино',
-        'white wine': 'белое вино',
-        
-        # Специальные термины
-        'to taste': 'по вкусу',
-        'optional': 'по желанию',
-        'divided': 'разделить',
-        'room temperature': 'комнатной температуры',
-        'chopped': 'измельченный',
-        'diced': 'нарезанный кубиками',
-        'minced': 'мелко нарезанный',
-        'sliced': 'нарезанный ломтиками',
-        'grated': 'тертый',
-        'mashed': 'пюре',
-        'beaten': 'взбитый',
-        'melted': 'растопленный',
-        'softened': 'размягченный',
-        'cold': 'холодный',
-        'warm': 'теплый',
-        'hot': 'горячий'
+        'wine': 'вино', 'red wine': 'красное вино', 'white wine': 'белое вино',
+        'to taste': 'по вкусу', 'optional': 'по желанию',
+        'divided': 'разделить', 'room temperature': 'комнатной температуры',
+        'chopped': 'измельченный', 'diced': 'нарезанный кубиками',
+        'minced': 'мелко нарезанный', 'sliced': 'нарезанный ломтиками',
+        'grated': 'тертый', 'mashed': 'пюре', 'beaten': 'взбитый',
+        'melted': 'растопленный', 'softened': 'размягченный',
+        'cold': 'холодный', 'warm': 'теплый', 'hot': 'горячий'
     }
     
-    # Проверяем точное совпадение
     if name_lower in ingredients_dict:
         return ingredients_dict[name_lower]
     
-    # Проверяем частичное совпадение (для фраз типа "all-purpose flour")
     for key, value in ingredients_dict.items():
         if key in name_lower:
-            # Заменяем найденную часть
             return name_lower.replace(key, value)
     
-    # Если нет в словаре, используем перевод
     translated = translate_to_russian(name)
     return translated
 
@@ -511,88 +324,66 @@ def translate_recipe_data(recipe_data):
     """Переводит основные поля рецепта на русский"""
     translated = {}
     
-    # Название блюда
     if recipe_data.get('title'):
         translated['title'] = translate_to_russian(recipe_data['title'])
     else:
         translated['title'] = "Неизвестное блюдо"
     
-    # Ингредиенты с полным переводом
     translated['ingredients'] = []
     for ingredient in recipe_data.get('extendedIngredients', []):
         if ingredient.get('original'):
-            original = ingredient.get('original', '')
-            
-            # Получаем отдельные части ингредиента из API
             amount = ingredient.get('amount', '')
             unit = ingredient.get('unit', '')
             name = ingredient.get('name', '')
             
-            # Переводим единицу измерения и название
             translated_unit = translate_measurement(unit) if unit else ""
             translated_name = translate_ingredient_name(name) if name else ""
             
-            # Формируем переведенную строку
             if amount and translated_unit and translated_name:
-                # Если есть количество, единица и название
                 translated_ingredient = f"• {amount} {translated_unit} {translated_name}"
             elif amount and translated_name:
-                # Если есть только количество и название
                 translated_ingredient = f"• {amount} {translated_name}"
             elif translated_name:
-                # Если есть только название
                 translated_ingredient = f"• {translated_name}"
             else:
-                # Если ничего не перевелось, используем оригинал
-                translated_ingredient = f"• {original}"
+                translated_ingredient = f"• {ingredient.get('original', '')}"
             
-            # Добавляем дополнительную информацию (например, "по желанию")
             if ingredient.get('meta') and ingredient['meta']:
                 meta = ", ".join([translate_to_russian(m) for m in ingredient['meta']])
                 translated_ingredient += f" ({meta})"
             
             translated['ingredients'].append(translated_ingredient)
     
-    # Инструкции
     if recipe_data.get('instructions'):
         instructions = recipe_data['instructions']
-        # Очищаем от HTML тегов
         instructions = re.sub('<[^<]+?>', '', instructions)
-        # Разбиваем на шаги
         steps = re.split(r'\n|\r\n', instructions)
         formatted_instructions = []
         for i, step in enumerate(steps, 1):
             if step.strip():
                 translated_step = translate_to_russian(step.strip())
                 formatted_instructions.append(f"{i}. {translated_step}")
-        
         translated['instructions'] = "\n".join(formatted_instructions)
     else:
         translated['instructions'] = None
     
-    # Время приготовления
     if recipe_data.get('readyInMinutes'):
         translated['readyInMinutes'] = recipe_data['readyInMinutes']
     
-    # Количество порций
     if recipe_data.get('servings'):
         translated['servings'] = recipe_data['servings']
     
-    # Кухня (если есть)
     if recipe_data.get('cuisines') and recipe_data['cuisines']:
         cuisines = [translate_to_russian(cuisine) for cuisine in recipe_data['cuisines']]
         translated['cuisines'] = cuisines
     
-    # Тип блюда
     if recipe_data.get('dishTypes') and recipe_data['dishTypes']:
         dish_types = [translate_to_russian(dt) for dt in recipe_data['dishTypes']]
         translated['dishTypes'] = dish_types
     
-    # Изображение
     if recipe_data.get('image'):
         translated['image'] = recipe_data['image']
     
-    # Дополнительная информация
     if recipe_data.get('summary'):
         summary = re.sub('<[^<]+?>', '', recipe_data['summary'])
         translated['summary'] = translate_to_russian(summary)
@@ -641,8 +432,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Дом:", reply_markup=home_kb())
         return
 
-    
-    # ===== PRODUCT ADD =====
     elif data == "prod_add":
         context.user_data["mode"] = "PROD_ADD"
         await q.message.reply_text("Напиши продукт одним сообщением")
@@ -656,7 +445,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text("Список очищен")
         return
 
-    # ===== PRODUCT LIST =====
     elif data == "prod_list":
         if not PRODUCTS:
             await q.message.reply_text("Список пуст")
@@ -665,7 +453,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text(f"🛒 Продукты:\n{txt}")
         return
 
-    # ===== REMINDERS =====
     elif data == "rem_create":
         context.user_data["mode"] = "REM_DATE"
         await q.message.reply_text(
@@ -674,12 +461,10 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Обработка календаря
     elif data.startswith("cal_"):
         await handle_calendar(q, context, data)
         return
     
-    # Обработка времени
     elif data.startswith("time_"):
         await handle_time(q, context, data)
         return
@@ -688,7 +473,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not REMINDERS:
             await q.message.reply_text("Напоминаний нет")
         else:
-            # Сортируем напоминания по дате
             sorted_reminders = sorted(REMINDERS, key=lambda x: datetime.strptime(x.split(" — ")[0], "%Y-%m-%d %H:%M"))
             txt = "\n".join([f"• {r}" for r in sorted_reminders])
             await q.message.reply_text(f"⏰ Напоминания:\n{txt}")
@@ -699,7 +483,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Все напоминания удалены")
         return
 
-    # ===== HOME =====
     elif data == "home_add":
         context.user_data["mode"] = "HOME_ADD"
         await q.message.reply_text("Напиши план по дому")
@@ -722,7 +505,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Все планы удалены")
         return
 
-    # ===== MOVIE PICK =====
     elif data == "film_pick":
         await send_movie(q, context)
     elif data.startswith("film_mood:"):
@@ -734,7 +516,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu":
         await q.message.reply_text("Меню:", reply_markup=menu_kb())
 
-    # ===== COOK PICK =====
     elif data == "cook_pick":
         await send_recipe(q, context, meal_type=None)
     elif data == "cook_breakfast":
@@ -790,7 +571,6 @@ async def handle_calendar(q, context, data):
         )
     
     elif data == "cal_ignore":
-        # Игнорируем нажатия на пустые кнопки
         pass
 
 async def handle_time(q, context, data):
@@ -801,13 +581,10 @@ async def handle_time(q, context, data):
         hour = int(parts[1])
         date = context.user_data["reminder_date"]
         
-        # Создаем datetime с выбранным часом
         reminder_datetime = datetime.combine(date, datetime.min.time().replace(hour=hour, minute=0))
         
-        # Проверяем, что время не в прошлом
         now = datetime.now()
         if reminder_datetime < now:
-            # Если выбран сегодняшний день и время уже прошло, предлагаем следующий час
             if reminder_datetime.date() == now.date():
                 await q.message.edit_text(
                     f"❌ Выбранное время {hour:02d}:00 уже прошло.\n"
@@ -818,7 +595,6 @@ async def handle_time(q, context, data):
         
         context.user_data["reminder_datetime"] = reminder_datetime
         
-        # Показываем подтверждение и запрашиваем текст
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Подтвердить", callback_data="time_confirm")],
             [InlineKeyboardButton("⬅️ Назад к дате", callback_data="rem_create")],
@@ -839,7 +615,6 @@ async def handle_time(q, context, data):
         now = datetime.now()
         date = context.user_data["reminder_date"]
         
-        # Используем текущее время, но добавляем 5 минут для сегодняшней даты
         if date == now.date():
             reminder_datetime = now + timedelta(minutes=5)
         else:
@@ -847,7 +622,6 @@ async def handle_time(q, context, data):
         
         context.user_data["reminder_datetime"] = reminder_datetime
         
-        # Показываем подтверждение и запрашиваем текст
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Подтвердить", callback_data="time_confirm")],
             [InlineKeyboardButton("⬅️ Назад к дате", callback_data="rem_create")],
@@ -871,11 +645,9 @@ async def send_movie(q, context, mood=None, genre=None):
         return
     
     try:
-        # Пробуем разные годы для поиска
         for attempt in range(3):
             year = random.randint(1990, 2024)
             
-            # Формируем поисковый запрос
             search_params = {
                 "apikey": OMDB_KEY,
                 "s": "movie",
@@ -883,7 +655,6 @@ async def send_movie(q, context, mood=None, genre=None):
                 "type": "movie"
             }
             
-            # Добавляем жанр если указан
             if genre:
                 search_params["s"] = f"movie {genre}"
             
@@ -894,7 +665,6 @@ async def send_movie(q, context, mood=None, genre=None):
                 movies = data.get("Search", [])
                 m = random.choice(movies)
                 
-                # Получаем детальную информацию
                 detail_params = {
                     "apikey": OMDB_KEY,
                     "i": m['imdbID'],
@@ -904,50 +674,40 @@ async def send_movie(q, context, mood=None, genre=None):
                 detail = detail_response.json()
                 
                 if detail.get("Response") == "True":
-                    # Переводим данные на русский
                     translated = translate_movie_data(detail)
                     
-                    # Формируем текст на русском
                     title = translated.get('Title', 'Неизвестно')
                     year = translated.get('Year', 'Неизвестно')
                     rating = translated.get('imdbRating', 'N/A')
                     
-                    # Переводим рейтинг
                     if rating != 'N/A':
                         rating_text = f"⭐ Рейтинг IMDb: {rating}"
                     else:
                         rating_text = "⭐ Рейтинг: Н/Д"
                     
-                    # Формируем основную информацию
                     text_parts = [f"🎬 *{title}* ({year})", rating_text]
                     
-                    # Добавляем жанр на русском
                     if detail.get('Genre') and detail['Genre'] != "N/A":
                         genres = detail['Genre'].split(', ')
                         russian_genres = [get_russian_genre(g) for g in genres]
                         text_parts.append(f"📺 Жанр: {', '.join(russian_genres)}")
                     
-                    # Добавляем сюжет
                     if translated.get('Plot') and translated['Plot'] != "N/A":
                         plot = translated['Plot']
                         if len(plot) > 300:
                             plot = plot[:300] + "..."
                         text_parts.append(f"\n📝 {plot}")
                     
-                    # Добавляем режиссера
                     if translated.get('Director') and translated['Director'] != "N/A":
                         text_parts.append(f"🎬 Режиссер: {translated['Director']}")
                     
-                    # Добавляем актеров (первые 3)
                     if translated.get('Actors') and translated['Actors'] != "N/A":
                         actors = translated['Actors'].split(', ')[:3]
                         text_parts.append(f"👥 В ролях: {', '.join(actors)}")
                     
-                    # Добавляем страну
                     if translated.get('Country') and translated['Country'] != "N/A":
                         text_parts.append(f"🌍 Страна: {translated['Country']}")
                     
-                    # Добавляем продолжительность
                     if detail.get('Runtime') and detail['Runtime'] != "N/A":
                         text_parts.append(f"⏱️ {detail['Runtime']}")
                     
@@ -960,7 +720,6 @@ async def send_movie(q, context, mood=None, genre=None):
                         await q.message.reply_text(final_text, parse_mode='Markdown')
                     return
         
-        # Если не нашли фильмы
         await q.message.reply_text("Не удалось найти подходящий фильм. Попробуйте еще раз.")
         
     except requests.exceptions.RequestException as e:
@@ -974,7 +733,6 @@ def translate_movie_data(movie_data):
     """Переводит основные поля фильма на русский"""
     translated = movie_data.copy()
     
-    # Поля для перевода
     fields_to_translate = {
         'Title': 'Название',
         'Plot': 'Сюжет',
@@ -989,20 +747,16 @@ def translate_movie_data(movie_data):
         'Type': 'Тип'
     }
     
-    # Переводим значения
     for eng_field, ru_field in fields_to_translate.items():
         if movie_data.get(eng_field) and movie_data[eng_field] != "N/A":
             translated[eng_field] = translate_to_russian(movie_data[eng_field])
     
-    # Рейтинг не переводим, но добавляем русскую метку
     if movie_data.get('imdbRating') and movie_data['imdbRating'] != "N/A":
         translated['imdbRating'] = movie_data['imdbRating']
     
-    # Год выпуска не переводим
     if movie_data.get('Year'):
         translated['Year'] = movie_data['Year']
     
-    # Постер не переводим
     if movie_data.get('Poster'):
         translated['Poster'] = movie_data['Poster']
     
@@ -1011,28 +765,17 @@ def translate_movie_data(movie_data):
 def get_russian_genre(english_genre):
     """Переводит жанры фильмов на русский"""
     genres = {
-        "Action": "Боевик",
-        "Adventure": "Приключения",
-        "Animation": "Мультфильм",
-        "Biography": "Биография",
-        "Comedy": "Комедия",
-        "Crime": "Криминал",
-        "Documentary": "Документальный",
-        "Drama": "Драма",
-        "Family": "Семейный",
-        "Fantasy": "Фэнтези",
-        "Film-Noir": "Нуар",
-        "History": "История",
-        "Horror": "Ужасы",
-        "Music": "Музыка",
-        "Musical": "Мюзикл",
-        "Mystery": "Мистика",
-        "Romance": "Мелодрама",
-        "Sci-Fi": "Фантастика",
-        "Sport": "Спорт",
-        "Thriller": "Триллер",
-        "War": "Военный",
-        "Western": "Вестерн"
+        "Action": "Боевик", "Adventure": "Приключения",
+        "Animation": "Мультфильм", "Biography": "Биография",
+        "Comedy": "Комедия", "Crime": "Криминал",
+        "Documentary": "Документальный", "Drama": "Драма",
+        "Family": "Семейный", "Fantasy": "Фэнтези",
+        "Film-Noir": "Нуар", "History": "История",
+        "Horror": "Ужасы", "Music": "Музыка",
+        "Musical": "Мюзикл", "Mystery": "Мистика",
+        "Romance": "Мелодрама", "Sci-Fi": "Фантастика",
+        "Sport": "Спорт", "Thriller": "Триллер",
+        "War": "Военный", "Western": "Вестерн"
     }
     return genres.get(english_genre, english_genre)
 
@@ -1043,10 +786,8 @@ async def send_recipe(q, context, meal_type=None):
         return
     
     try:
-        # Формируем URL в зависимости от типа приема пищи
         url = f"https://api.spoonacular.com/recipes/random?apiKey={SPOON_KEY}&number=1"
         
-        # Добавляем теги для типа приема пищи
         if meal_type:
             meal_tags = {
                 "breakfast": "breakfast",
@@ -1069,39 +810,42 @@ async def send_recipe(q, context, meal_type=None):
             return
             
         recipe = data["recipes"][0]
+        recipe_id = recipe.get('id')
+        recipe_title = recipe.get('title', '')
         
-        # Переводим данные рецепта
+        # Формируем ссылку на рецепт
+        if recipe_id and recipe_title:
+            # Очищаем название для URL
+            clean_title = re.sub(r'[^\w\s-]', '', recipe_title).strip().lower()
+            clean_title = re.sub(r'[-\s]+', '-', clean_title)
+            recipe_url = f"https://spoonacular.com/recipes/{clean_title}-{recipe_id}"
+        else:
+            recipe_url = None
+        
         translated = translate_recipe_data(recipe)
-        
-        # Формируем текст на русском
         title = translated.get('title', 'Неизвестное блюдо')
         
-        # Заголовок с типом приема пищи
+        # Формируем текст
         if meal_type:
             meal_header = get_meal_type_description(meal_type)
             text_parts = [f"{meal_header}\n🍳 *{title}*"]
         else:
             text_parts = [f"🍳 *{title}*"]
         
-        # Время приготовления
         if translated.get('readyInMinutes'):
             text_parts.append(f"⏱️ *Время приготовления:* {translated['readyInMinutes']} минут")
         
-        # Количество порций
         if translated.get('servings'):
             text_parts.append(f"👥 *Порций:* {translated['servings']}")
         
-        # Кухня
         if translated.get('cuisines') and translated['cuisines']:
             cuisines_text = ", ".join(translated['cuisines'])
             text_parts.append(f"🍜 *Кухня:* {cuisines_text}")
         
-        # Тип блюда
         if translated.get('dishTypes') and translated['dishTypes']:
             dish_types = ", ".join(translated['dishTypes'][:3])
             text_parts.append(f"📋 *Тип блюда:* {dish_types}")
         
-        # Польза для здоровья
         if translated.get('healthScore'):
             health_score = translated['healthScore']
             if health_score > 70:
@@ -1112,28 +856,79 @@ async def send_recipe(q, context, meal_type=None):
                 health_emoji = "❤️"
             text_parts.append(f"{health_emoji} *Полезность:* {health_score}/100")
         
-        # Ингредиенты
         if translated.get('ingredients'):
             text_parts.append("\n🧾 *Ингредиенты:*")
-            # Показываем все ингредиенты
-            ingredients = translated['ingredients']
+            ingredients = translated['ingredients'][:8]
             text_parts.extend(ingredients)
+            if len(translated['ingredients']) > 8:
+                text_parts.append(f"... и еще {len(translated['ingredients']) - 8} ингредиентов")
         
-        # Краткое описание
         if translated.get('summary'):
             summary = translated['summary']
-            if len(summary) > 200:
-                summary = summary[:200] + "..."
-            text_parts.append(f"\n📝 *Описание:*\n{summary}")
+            if len(summary) > 150:
+                summary = summary[:150] + "..."
+            text_parts.append(f"\n📝 *Кратко:* {summary}")
         
-        # Инструкции
         if translated.get('instructions'):
             instructions = translated['instructions']
-            text_parts.append(f"\n📝 *Приготовление:*\n{instructions}")
+            instruction_lines = instructions.split('\n')
+            if instruction_lines:
+                text_parts.append(f"\n📝 *Первые шаги:*")
+                for i, line in enumerate(instruction_lines[:2]):
+                    text_parts.append(line)
+                if len(instruction_lines) > 2:
+                    text_parts.append("...")
         
-        final_text = "\n".join(text_parts)
+        if recipe_url:
+            text_parts.append(f"\n🔗 [Полный рецепт]({recipe_url})")
         
-        # Отправляем фото если есть
+        full_text = "\n".join(text_parts)
+        
+        # Проверяем длину текста
+        if len(full_text) > 1024:
+            # Упрощенная версия
+            simple_parts = []
+            
+            if meal_type:
+                meal_header = get_meal_type_description(meal_type)
+                simple_parts.append(f"{meal_header}\n🍳 *{title}*")
+            else:
+                simple_parts.append(f"🍳 *{title}*")
+            
+            time_servings = []
+            if translated.get('readyInMinutes'):
+                time_servings.append(f"{translated['readyInMinutes']}мин")
+            if translated.get('servings'):
+                time_servings.append(f"{translated['servings']}порц")
+            if time_servings:
+                simple_parts.append(f"⏱️ {' | '.join(time_servings)}")
+            
+            if translated.get('ingredients'):
+                simple_parts.append("\n🧾 *Ингредиенты:*")
+                for ing in translated['ingredients'][:5]:
+                    if len(ing) > 30:
+                        ing = ing[:30] + "..."
+                    simple_parts.append(ing)
+                if len(translated['ingredients']) > 5:
+                    simple_parts.append("...")
+            
+            if recipe_url:
+                simple_parts.append(f"\n🔗 [Полный рецепт]({recipe_url})")
+            
+            final_text = "\n".join(simple_parts)
+            
+            # Если все еще длинный
+            if len(final_text) > 1024:
+                short_text = f"{meal_header if meal_type else '🍳'} *{title}*\n"
+                if translated.get('readyInMinutes'):
+                    short_text += f"⏱️ {translated['readyInMinutes']}мин "
+                if translated.get('servings'):
+                    short_text += f"| 👥 {translated['servings']}порц\n"
+                short_text += f"\n🔗 [Полный рецепт]({recipe_url})"
+                final_text = short_text
+        else:
+            final_text = full_text
+        
         if translated.get('image'):
             await q.message.reply_photo(
                 translated['image'], 
@@ -1168,7 +963,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "reminder_datetime" in context.user_data:
             dt = context.user_data["reminder_datetime"]
             
-            # Проверяем, что дата не в прошлом
             if dt < datetime.now():
                 await update.message.reply_text(
                     "❌ Нельзя создать напоминание на прошедшую дату.\n"
@@ -1179,8 +973,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             reminder_text = f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}"
             REMINDERS.append(reminder_text)
-            
-            # Сортируем напоминания
             REMINDERS.sort(key=lambda x: datetime.strptime(x.split(" — ")[0], "%Y-%m-%d %H:%M"))
 
             await update.message.reply_text(
@@ -1202,7 +994,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Нельзя добавить пустой план")
 
     else:
-        # Если не в специальном режиме, просто показываем меню
         await update.message.reply_text(
             "Используйте кнопки меню для навигации",
             reply_markup=menu_kb()
