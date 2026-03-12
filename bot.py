@@ -4,7 +4,6 @@ import asyncio
 import random
 import requests
 from datetime import datetime, timedelta
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -102,27 +101,34 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "back":
         await q.message.reply_text("Меню:", reply_markup=menu_kb())
+        return
 
     elif data == "prod":
         await q.message.reply_text("Продукты:", reply_markup=prod_kb())
+        return
 
     elif data == "rem":
         await q.message.reply_text("Напоминания:", reply_markup=rem_kb())
+        return
 
     elif data == "film":
         await q.message.reply_text("Фильмы:", reply_markup=film_kb())
+        return
 
     elif data == "cook":
         await q.message.reply_text("Рецепты:", reply_markup=cook_kb())
+        return
 
     elif data == "home":
         await q.message.reply_text("Дом:", reply_markup=home_kb())
+        return
 
     
     # ===== PRODUCT ADD =====
     elif data == "prod_add":
         context.user_data["mode"] = "PROD_ADD"
         await q.message.reply_text("Напиши продукт одним сообщением")
+        return
 
     elif data == "prod_done":
         if not PRODUCTS:
@@ -130,54 +136,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             PRODUCTS.clear()
             await q.message.reply_text("Список очищен")
-
-    # ===== REMINDERS =====
-    elif data == "rem_create":
-
-        context.user_data["mode"] = "REM_DATE"
-
-        today = datetime.now().strftime("%Y-%m-%d")
-
-        await q.message.reply_text(
-            f"📅 Введи дату напоминания\n\nПример:\n{today}"
-    )
-
-    elif data == "rem_list":
-        if not REMINDERS:
-            await q.message.reply_text("Напоминаний нет")
-        else:
-            txt = "\n".join([f"• {r}" for r in REMINDERS])
-            await q.message.reply_text(f"⏰ Напоминания:\n{txt}")
-
-    elif data == "rem_del":
-        REMINDERS.clear()
-        await q.message.reply_text("Напоминания удалены")
-
-    # ===== HOME =====
-    elif data == "home_add":
-        context.user_data["mode"] = "HOME_ADD"
-        await q.message.reply_text("Напиши план по дому")
-
-    elif data == "home_list":
-        if not HOME_PLANS:
-            await q.message.reply_text("Планов нет")
-        else:
-            txt = "\n".join([f"• {h}" for h in HOME_PLANS])
-            await q.message.reply_text(f"🏠 Планы:\n{txt}")
-
-    # ===== MOVIE PICK =====
-    elif data == "film_pick":
-        await send_movie(q)
-    elif data.startswith("film_mood:"):
-        mood = data.split(":")[1]
-        await send_movie(q, mood=mood)
-    elif data.startswith("film_genre:"):
-        genre = data.split(":")[1]
-        await send_movie(q, genre=genre)
-
-    # ===== COOK PICK =====
-    elif data == "cook_pick":
-        await send_recipe(q)
+        return
 
     # ===== PRODUCT LIST =====
     elif data == "prod_list":
@@ -186,142 +145,269 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             txt = "\n".join([f"• {p}" for p in PRODUCTS])
             await q.message.reply_text(f"🛒 Продукты:\n{txt}")
+        return
 
+    # ===== REMINDERS =====
+    elif data == "rem_create":
+        context.user_data["mode"] = "REM_CREATE"
+        await q.message.reply_text("Напиши напоминание в формате: YYYY-MM-DD HH:MM текст")
+        return
 
-# ===== TRANSLATE =====
-def translate_ru(text):
-    try:
-        resp = requests.get("https://translate.googleapis.com/translate_a/single", params={
-            "client":"gtx","sl":"auto","tl":"ru","dt":"t","q":text
-        }).json()
-        return "".join([t[0] for t in resp[0]])
-    except:
-        return text
+    elif data == "rem_list":
+        if not REMINDERS:
+            await q.message.reply_text("Напоминаний нет")
+        else:
+            txt = "\n".join([f"• {r}" for r in REMINDERS])
+            await q.message.reply_text(f"⏰ Напоминания:\n{txt}")
+        return
+
+    elif data == "rem_del":
+        REMINDERS.clear()
+        await q.message.reply_text("Напоминания удалены")
+        return
+
+    # ===== HOME =====
+    elif data == "home_add":
+        context.user_data["mode"] = "HOME_ADD"
+        await q.message.reply_text("Напиши план по дому")
+        return
+
+    elif data == "home_list":
+        if not HOME_PLANS:
+            await q.message.reply_text("Планов нет")
+        else:
+            txt = "\n".join([f"• {h}" for h in HOME_PLANS])
+            await q.message.reply_text(f"🏠 Планы:\n{txt}")
+        return
+
+    elif data == "home_edit":
+        await q.message.reply_text("Функция редактирования пока не реализована")
+        return
+
+    elif data == "home_del":
+        HOME_PLANS.clear()
+        await q.message.reply_text("Все планы удалены")
+        return
+
+    # ===== MOVIE PICK =====
+    elif data == "film_pick":
+        await send_movie(q, context)
+    elif data.startswith("film_mood:"):
+        mood = data.split(":")[1]
+        await send_movie(q, context, mood=mood)
+    elif data.startswith("film_genre:"):
+        genre = data.split(":")[1]
+        await send_movie(q, context, genre=genre)
+    elif data == "menu":
+        await q.message.reply_text("Меню:", reply_markup=menu_kb())
+
+    # ===== COOK PICK =====
+    elif data == "cook_pick":
+        await send_recipe(q, context)
 
 
 # ===== MOVIE =====
-async def send_movie(q):
+async def send_movie(q, context, mood=None, genre=None):
+    if not OMDB_KEY:
+        await q.message.reply_text("OMDB API ключ не настроен")
+        return
+    
     try:
-        year = random.randint(1990, 2024)
-        url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}&s=movie&y={year}"
-        data = requests.get(url).json()
-        movies = data.get("Search", [])
-        if not movies:
-            await q.message.reply_text("Фильм не найден")
-            return
-        m = random.choice(movies)
-        detail = requests.get(
-            f"http://www.omdbapi.com/?apikey={OMDB_KEY}&i={m['imdbID']}&plot=full"
-        ).json()
-        text = f"🎬 {detail.get('Title')} ({detail.get('Year')})\n⭐ {detail.get('imdbRating')}\n\n{detail.get('Plot')}"
-        poster = detail.get("Poster")
-        if poster and poster != "N/A":
-            await q.message.reply_photo(poster, caption=text)
-        else:
-            await q.message.reply_text(text)
-    except:
-        await q.message.reply_text("Ошибка фильма")
+        # Пробуем разные годы для поиска
+        for _ in range(3):  # Делаем до 3 попыток найти фильм
+            year = random.randint(1990, 2024)
+            search_url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}&s=movie&y={year}&type=movie"
+            
+            # Добавляем жанр если указан
+            if genre:
+                search_url += f"&genre={genre}"
+            
+            response = requests.get(search_url, timeout=10)
+            data = response.json()
+            
+            if data.get("Response") == "True" and data.get("Search"):
+                movies = data.get("Search", [])
+                m = random.choice(movies)
+                
+                # Получаем детальную информацию
+                detail_url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}&i={m['imdbID']}&plot=full"
+                detail_response = requests.get(detail_url, timeout=10)
+                detail = detail_response.json()
+                
+                if detail.get("Response") == "True":
+                    title = detail.get('Title', 'Неизвестно')
+                    year = detail.get('Year', 'Неизвестно')
+                    rating = detail.get('imdbRating', 'N/A')
+                    plot = detail.get('Plot', 'Описание отсутствует')
+                    
+                    text = f"🎬 {title} ({year})\n⭐ {rating}\n\n{plot}"
+                    
+                    # Добавляем информацию о жанре если есть
+                    if detail.get('Genre'):
+                        text = f"🎬 {title} ({year})\n📺 {detail.get('Genre')}\n⭐ {rating}\n\n{plot}"
+                    
+                    poster = detail.get("Poster")
+                    if poster and poster != "N/A":
+                        await q.message.reply_photo(poster, caption=text)
+                    else:
+                        await q.message.reply_text(text)
+                    return
+        
+        # Если не нашли фильмы
+        await q.message.reply_text("Не удалось найти подходящий фильм. Попробуйте еще раз.")
+        
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при запросе к OMDB API: {e}")
+        await q.message.reply_text("Ошибка при получении информации о фильме. Проверьте подключение к интернету.")
+    except Exception as e:
+        logging.error(f"Неожиданная ошибка в send_movie: {e}")
+        await q.message.reply_text("Произошла ошибка при поиске фильма")
 
 # ===== RECIPE =====
-async def send_recipe(q):
+async def send_recipe(q, context):
+    if not SPOON_KEY:
+        await q.message.reply_text("Spoonacular API ключ не настроен")
+        return
+    
     try:
         url = f"https://api.spoonacular.com/recipes/random?apiKey={SPOON_KEY}&number=1"
-        data = requests.get(url).json()
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code != 200:
+            await q.message.reply_text("Ошибка при получении рецепта. Проверьте API ключ.")
+            return
+            
+        data = response.json()
+        if not data.get("recipes"):
+            await q.message.reply_text("Не удалось найти рецепт")
+            return
+            
         r = data["recipes"][0]
-        title = r["title"]
-        img = r["image"]
-        ingredients = "\n".join([f"• {i['original']}" for i in r["extendedIngredients"]])
-        text = f"🍳 {title}\n\n🧾 Ингредиенты:\n{ingredients}"
-        await q.message.reply_photo(img, caption=text)
-    except:
-        await q.message.reply_text("Ошибка рецепта")
+        title = r.get("title", "Неизвестное блюдо")
+        img = r.get("image")
+        
+        # Форматируем ингредиенты
+        ingredients = []
+        for i in r.get("extendedIngredients", []):
+            original = i.get("original", "")
+            if original:
+                ingredients.append(f"• {original}")
+        
+        if ingredients:
+            ingredients_text = "\n".join(ingredients)
+            text = f"🍳 {title}\n\n🧾 Ингредиенты:\n{ingredients_text}"
+        else:
+            text = f"🍳 {title}"
+        
+        # Добавляем инструкцию если есть
+        if r.get("instructions"):
+            # Ограничиваем длину инструкции
+            instructions = r.get("instructions")[:500] + "..." if len(r.get("instructions", "")) > 500 else r.get("instructions")
+            text += f"\n\n📝 Приготовление:\n{instructions}"
+        
+        if img:
+            await q.message.reply_photo(img, caption=text)
+        else:
+            await q.message.reply_text(text)
+            
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при запросе к Spoonacular API: {e}")
+        await q.message.reply_text("Ошибка при получении рецепта. Проверьте подключение к интернету.")
+    except Exception as e:
+        logging.error(f"Неожиданная ошибка в send_recipe: {e}")
+        await q.message.reply_text("Произошла ошибка при поиске рецепта")
 
 
 # ===== TEXT HANDLER =====
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get("mode")
-    # ===== ВВОД ДАТЫ =====
-if mode == "REM_DATE":
-
-    try:
-        datetime.strptime(txt, "%Y-%m-%d")
-    except:
-        await update.message.reply_text("Формат даты: YYYY-MM-DD")
-        return
-# ===== ВВОД ВРЕМЕНИ =====
-if mode == "REM_TIME":
-
-    try:
-        datetime.strptime(txt, "%H:%M")
-    except:
-        await update.message.reply_text("Формат времени: HH:MM")
-        return
-
-    context.user_data["rem_time"] = txt
-    context.user_data["mode"] = "REM_TEXT"
-
-    await update.message.reply_text("✏️ Напиши текст напоминания")
-
-    return
-
-    context.user_data["rem_date"] = txt
-    context.user_data["mode"] = "REM_TIME"
-
-    await update.message.reply_text("🕒 Введи время\n\nПример:\n19:30")
-
-    return
-    
     txt = update.message.text.strip()
 
     if mode == "PROD_ADD":
-        PRODUCTS.append(txt)
-        context.user_data.clear()
-        await update.message.reply_text("Добавлено")
+        if txt:
+            PRODUCTS.append(txt)
+            context.user_data.clear()
+            await update.message.reply_text(f"✅ Продукт '{txt}' добавлен в список")
+        else:
+            await update.message.reply_text("❌ Нельзя добавить пустой продукт")
 
-    elif mode == "REM_TEXT":
+    elif mode == "REM_CREATE":
+        try:
+            # Проверяем формат даты и времени
+            if len(txt) < 16:
+                await update.message.reply_text(
+                    "❌ Слишком короткое сообщение.\n"
+                    "Используй формат: YYYY-MM-DD HH:MM текст\n"
+                    "Пример: 2024-12-31 18:00 Купить подарки"
+                )
+                return
+                
+            date_part = txt[:16]
+            text_part = txt[16:].strip()
+            
+            if not text_part:
+                await update.message.reply_text(
+                    "❌ Добавьте текст напоминания после даты и времени"
+                )
+                return
 
-    try:
-        date = context.user_data.get("rem_date")
-        time = context.user_data.get("rem_time")
+            dt = datetime.strptime(date_part, "%Y-%m-%d %H:%M")
+            
+            # Проверяем, что дата не в прошлом
+            if dt < datetime.now():
+                await update.message.reply_text(
+                    "❌ Нельзя создать напоминание на прошедшую дату"
+                )
+                return
 
-        dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+            REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {text_part}")
+            context.user_data.clear()
 
-        REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}")
+            await update.message.reply_text(
+                f"✅ Напоминание создано:\n"
+                f"📅 {dt.strftime('%Y-%m-%d %H:%M')}\n"
+                f"📝 {text_part}"
+            )
 
-        context.user_data.clear()
+        except ValueError as e:
+            await update.message.reply_text(
+                "❌ Неверный формат даты и времени.\n"
+                "Используй: YYYY-MM-DD HH:MM текст\n"
+                "Пример: 2024-12-31 18:00 Купить подарки"
+            )
+        except Exception as e:
+            logging.error(f"Ошибка при создании напоминания: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при создании напоминания")
 
+    elif mode == "HOME_ADD":
+        if txt:
+            HOME_PLANS.append(txt)
+            context.user_data.clear()
+            await update.message.reply_text(f"✅ План '{txt}' добавлен")
+        else:
+            await update.message.reply_text("❌ Нельзя добавить пустой план")
+
+    else:
+        # Если не в специальном режиме, просто игнорируем или показываем меню
         await update.message.reply_text(
-            f"⏰ Напоминание создано
-📅 {dt.strftime('%Y-%m-%d %H:%M')}
-📝 {txt}"
+            "Используйте кнопки меню для навигации",
+            reply_markup=menu_kb()
         )
 
-    except:
-        await update.message.reply_text("Ошибка")
-    elif mode == "HOME_ADD":
-        HOME_PLANS.append(txt)
-        context.user_data.clear()
-        await update.message.reply_text("План добавлен")
 
 # ===== MAIN =====
-scheduler = AsyncIOScheduler()
-scheduler.start()
-
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    print("Bot running...")
+    
+    print("🤖 Бот запущен...")
+    print(f"Токен: {TOKEN[:10]}...")
+    print(f"OMDB ключ: {'✅' if OMDB_KEY else '❌'}")
+    print(f"Spoonacular ключ: {'✅' if SPOON_KEY else '❌'}")
+    
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
