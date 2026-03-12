@@ -304,10 +304,9 @@ if mode == "REM_TIME":
         f"⏰ Напоминание создано\n📅 {date} {time}\n📝 {txt}"
     )
     
-    except:
-        await update.message.reply_text(
-                "Неверный формат. Используй: YYYY-MM-DD HH:MM текст"
-            )
+except:
+    await update.message.reply_text("Неверный формат. Используй: YYYY-MM-DD HH:MM текст"
+    )
 
     elif mode == "HOME_ADD":
         HOME_PLANS.append(txt)
@@ -328,6 +327,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
