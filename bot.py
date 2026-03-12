@@ -303,8 +303,8 @@ if mode == "REM_TIME":
     await update.message.reply_text(
         f"⏰ Напоминание создано\n📅 {date} {time}\n📝 {txt}"
     )
-        except:
-            await update.message.reply_text(
+    except:
+        await update.message.reply_text(
                 "Неверный формат. Используй: YYYY-MM-DD HH:MM текст"
             )
 
@@ -327,6 +327,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
