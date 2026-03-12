@@ -252,11 +252,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             context.user_data.clear()
 
-            await update.message.reply_text(
-                f"⏰ Напоминание создано
-📅 {dt.strftime('%Y-%m-%d %H:%M')}
-📝 {text_part}"
-            )
+        await update.message.reply_text(
+            f"⏰ Напоминание создано\n📅 {dt.strftime('%Y-%m-%d %H:%M')}\n📝 {text_part}"
+)
 
         except:
             await update.message.reply_text(
@@ -279,3 +277,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
