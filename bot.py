@@ -280,6 +280,7 @@ if mode == "REM_TIME":
 
     elif mode == "REM_TEXT":
 
+    try:
         date = context.user_data.get("rem_date")
         time = context.user_data.get("rem_time")
 
@@ -287,27 +288,16 @@ if mode == "REM_TIME":
 
         REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}")
 
-        delay = (dt - datetime.now()).total_seconds()
+        context.user_data.clear()
 
-    async def send_reminder():
-        await update.message.reply_text(f"⏰ Напоминание: {txt}")
+        await update.message.reply_text(
+            f"⏰ Напоминание создано
+📅 {dt.strftime('%Y-%m-%d %H:%M')}
+📝 {txt}"
+        )
 
-    scheduler.add_job(
-        lambda: asyncio.create_task(send_reminder()),
-        "date",
-        run_date=dt
-    )
-
-    context.user_data.clear()
-
-    await update.message.reply_text(
-        f"⏰ Напоминание создано\n📅 {date} {time}\n📝 {txt}"
-    )
-    
-except:
-    await update.message.reply_text("Неверный формат. Используй: YYYY-MM-DD HH:MM текст"
-    )
-
+    except:
+        await update.message.reply_text("Ошибка")
     elif mode == "HOME_ADD":
         HOME_PLANS.append(txt)
         context.user_data.clear()
@@ -327,6 +317,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
