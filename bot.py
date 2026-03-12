@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkay,
+    InlineKeyboardMarkup,  # Исправлено: было InlineKeyboardMarkay
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -210,56 +210,89 @@ def translate_to_russian(text):
 
 def parse_ingredient(ingredient_string):
     """Парсит строку ингредиента на количество, единицу измерения и название"""
-    # Пробуем разные паттерны
-    patterns = [
-        r'^([\d\s\.,/]+)\s+([a-zA-Z\s]+)\s+(.+)$',  # "2 cups flour"
-        r'^([\d\s\.,/]+)\s+([a-zA-Z]+)\s+(.+)$',    # "2 tbsp sugar"
-        r'^([\d\s\.,/]+)\s+(.+)$',                    # "2 apples"
-        r'^(.+)$'                                      # просто название
-    ]
+    # Сначала пробуем найти количество (число в начале)
+    ingredient_string = ingredient_string.strip()
     
-    for pattern in patterns:
-        match = re.match(pattern, ingredient_string.strip())
-        if match:
-            groups = match.groups()
-            if len(groups) == 3:
-                return groups[0].strip(), groups[1].strip(), groups[2].strip()
-            elif len(groups) == 2:
-                return groups[0].strip(), "", groups[1].strip()
-            else:
-                return "", "", groups[0].strip()
+    # Паттерн для поиска числа в начале (поддерживает дроби и десятичные)
+    number_match = re.match(r'^([\d\s\.,/]+)\s+(.*)$', ingredient_string)
     
-    return "", "", ingredient_string.strip()
+    if number_match:
+        amount = number_match.group(1).strip()
+        rest = number_match.group(2).strip()
+        
+        # Ищем единицу измерения в оставшейся части
+        measure_patterns = [
+            r'^(tsp|teaspoon|teaspoons|tbsp|tablespoon|tablespoons|cup|cups|oz|ounce|ounces|lb|pound|pounds|g|gram|grams|kg|kilogram|kilograms|ml|milliliter|milliliters|l|liter|liters|pinch|pinches|dash|dashes|clove|cloves|piece|pieces|slice|slices|can|cans|package|packages|bunch|bunches)\s+(.*)$',
+            r'^(small|medium|large)\s+(.*)$',  # размер
+        ]
+        
+        for pattern in measure_patterns:
+            measure_match = re.match(pattern, rest, re.IGNORECASE)
+            if measure_match:
+                measure = measure_match.group(1)
+                name = measure_match.group(2)
+                return amount, measure, name
+        
+        # Если не нашли единицу измерения, значит это просто название
+        return amount, "", rest
+    
+    # Если нет числа в начале, значит это просто название
+    return "", "", ingredient_string
 
 def translate_measurement(measure):
     """Переводит единицы измерения на русский"""
+    if not measure:
+        return ""
+    
+    measure_lower = measure.lower().strip()
+    
     measurements = {
+        # Чайные ложки
         'tsp': 'ч.л.',
         'teaspoon': 'ч.л.',
         'teaspoons': 'ч.л.',
+        
+        # Столовые ложки
         'tbsp': 'ст.л.',
         'tablespoon': 'ст.л.',
         'tablespoons': 'ст.л.',
+        
+        # Стаканы
         'cup': 'стакан',
         'cups': 'стакана',
+        
+        # Унции
         'oz': 'унция',
         'ounce': 'унция',
         'ounces': 'унций',
+        
+        # Фунты
         'lb': 'фунт',
         'pound': 'фунт',
         'pounds': 'фунтов',
+        
+        # Граммы и килограммы
         'g': 'г',
         'gram': 'г',
         'grams': 'г',
         'kg': 'кг',
         'kilogram': 'кг',
         'kilograms': 'кг',
+        
+        # Миллилитры и литры
         'ml': 'мл',
         'milliliter': 'мл',
         'milliliters': 'мл',
         'l': 'л',
         'liter': 'л',
         'liters': 'л',
+        
+        # Размеры
+        'small': 'маленький',
+        'medium': 'средний',
+        'large': 'большой',
+        
+        # Прочее
         'pinch': 'щепотка',
         'pinches': 'щепотки',
         'dash': 'капля',
@@ -275,53 +308,200 @@ def translate_measurement(measure):
         'package': 'упаковка',
         'packages': 'упаковки',
         'bunch': 'пучок',
-        'bunches': 'пучка'
+        'bunches': 'пучка',
+        'to': 'по',  # для "to taste"
+        'taste': 'вкусу'
     }
-    return measurements.get(measure.lower(), measure)
+    
+    return measurements.get(measure_lower, measure)
 
 def translate_ingredient_name(name):
     """Переводит название ингредиента"""
-    # Словарь распространенных ингредиентов
-    ingredients_dict = {
-        'flour': 'мука',
-        'sugar': 'сахар',
-        'salt': 'соль',
-        'pepper': 'перец',
-        'butter': 'масло сливочное',
-        'oil': 'масло растительное',
-        'egg': 'яйцо',
-        'eggs': 'яйца',
-        'milk': 'молоко',
-        'water': 'вода',
-        'chicken': 'курица',
-        'beef': 'говядина',
-        'pork': 'свинина',
-        'fish': 'рыба',
-        'rice': 'рис',
-        'pasta': 'паста',
-        'cheese': 'сыр',
-        'onion': 'лук',
-        'garlic': 'чеснок',
-        'tomato': 'помидор',
-        'potato': 'картофель',
-        'carrot': 'морковь',
-        'apple': 'яблоко',
-        'banana': 'банан',
-        'lemon': 'лимон',
-        'orange': 'апельсин',
-        'bread': 'хлеб',
-        'butter': 'масло',
-        'cream': 'сливки',
-        'yogurt': 'йогурт',
-        'honey': 'мед',
-        'vanilla': 'ваниль',
-        'cinnamon': 'корица',
-        'chocolate': 'шоколад'
-    }
+    if not name:
+        return ""
     
     name_lower = name.lower().strip()
+    
+    # Словарь распространенных ингредиентов
+    ingredients_dict = {
+        # Мука и крупы
+        'flour': 'мука',
+        'all-purpose flour': 'мука универсальная',
+        'bread flour': 'мука для хлеба',
+        'whole wheat flour': 'цельнозерновая мука',
+        'rice': 'рис',
+        'pasta': 'паста',
+        'noodles': 'лапша',
+        'oat': 'овес',
+        'oats': 'овсяные хлопья',
+        'cereal': 'хлопья',
+        
+        # Сахар и подсластители
+        'sugar': 'сахар',
+        'brown sugar': 'коричневый сахар',
+        'powdered sugar': 'сахарная пудра',
+        'honey': 'мед',
+        'syrup': 'сироп',
+        'maple syrup': 'кленовый сироп',
+        
+        # Соль и специи
+        'salt': 'соль',
+        'pepper': 'перец',
+        'black pepper': 'черный перец',
+        'cinnamon': 'корица',
+        'vanilla': 'ваниль',
+        'vanilla extract': 'ванильный экстракт',
+        'garlic powder': 'чесночный порошок',
+        'onion powder': 'луковый порошок',
+        'paprika': 'паприка',
+        'oregano': 'орегано',
+        'basil': 'базилик',
+        'thyme': 'тимьян',
+        'rosemary': 'розмарин',
+        'cumin': 'кумин',
+        'turmeric': 'куркума',
+        'ginger': 'имбирь',
+        'nutmeg': 'мускатный орех',
+        
+        # Масла и жиры
+        'butter': 'сливочное масло',
+        'unsalted butter': 'несоленое сливочное масло',
+        'oil': 'растительное масло',
+        'olive oil': 'оливковое масло',
+        'vegetable oil': 'растительное масло',
+        'coconut oil': 'кокосовое масло',
+        
+        # Молочные продукты
+        'milk': 'молоко',
+        'cream': 'сливки',
+        'heavy cream': 'жирные сливки',
+        'sour cream': 'сметана',
+        'yogurt': 'йогурт',
+        'cheese': 'сыр',
+        'cheddar': 'чеддер',
+        'parmesan': 'пармезан',
+        'mozzarella': 'моцарелла',
+        'cream cheese': 'сливочный сыр',
+        'egg': 'яйцо',
+        'eggs': 'яйца',
+        
+        # Мясо и рыба
+        'chicken': 'курица',
+        'chicken breast': 'куриная грудка',
+        'chicken thigh': 'куриное бедро',
+        'beef': 'говядина',
+        'ground beef': 'говяжий фарш',
+        'pork': 'свинина',
+        'bacon': 'бекон',
+        'sausage': 'колбаса',
+        'fish': 'рыба',
+        'salmon': 'лосось',
+        'tuna': 'тунец',
+        'shrimp': 'креветки',
+        
+        # Овощи
+        'onion': 'лук',
+        'onions': 'лук',
+        'garlic': 'чеснок',
+        'tomato': 'помидор',
+        'tomatoes': 'помидоры',
+        'potato': 'картофель',
+        'potatoes': 'картофель',
+        'carrot': 'морковь',
+        'carrots': 'морковь',
+        'celery': 'сельдерей',
+        'bell pepper': 'болгарский перец',
+        'mushroom': 'гриб',
+        'mushrooms': 'грибы',
+        'spinach': 'шпинат',
+        'broccoli': 'брокколи',
+        'cauliflower': 'цветная капуста',
+        'zucchini': 'цуккини',
+        'cucumber': 'огурец',
+        'lettuce': 'салат',
+        'cabbage': 'капуста',
+        
+        # Фрукты
+        'apple': 'яблоко',
+        'apples': 'яблоки',
+        'banana': 'банан',
+        'bananas': 'бананы',
+        'lemon': 'лимон',
+        'lemons': 'лимоны',
+        'lime': 'лайм',
+        'orange': 'апельсин',
+        'oranges': 'апельсины',
+        'strawberry': 'клубника',
+        'strawberries': 'клубника',
+        'blueberry': 'голубика',
+        'blueberries': 'голубика',
+        'raspberry': 'малина',
+        'raspberries': 'малина',
+        
+        # Хлеб и выпечка
+        'bread': 'хлеб',
+        'bread crumbs': 'панировочные сухари',
+        'crust': 'корка',
+        'dough': 'тесто',
+        
+        # Соусы и заправки
+        'sauce': 'соус',
+        'ketchup': 'кетчуп',
+        'mustard': 'горчица',
+        'mayonnaise': 'майонез',
+        'vinegar': 'уксус',
+        'soy sauce': 'соевый соус',
+        'worcestershire sauce': 'соус ворчестер',
+        'hot sauce': 'острый соус',
+        
+        # Орехи и семена
+        'nuts': 'орехи',
+        'almond': 'миндаль',
+        'almonds': 'миндаль',
+        'walnut': 'грецкий орех',
+        'walnuts': 'грецкие орехи',
+        'peanut': 'арахис',
+        'peanuts': 'арахис',
+        'sesame': 'кунжут',
+        
+        # Напитки
+        'water': 'вода',
+        'broth': 'бульон',
+        'chicken broth': 'куриный бульон',
+        'beef broth': 'говяжий бульон',
+        'vegetable broth': 'овощной бульон',
+        'wine': 'вино',
+        'red wine': 'красное вино',
+        'white wine': 'белое вино',
+        
+        # Специальные термины
+        'to taste': 'по вкусу',
+        'optional': 'по желанию',
+        'divided': 'разделить',
+        'room temperature': 'комнатной температуры',
+        'chopped': 'измельченный',
+        'diced': 'нарезанный кубиками',
+        'minced': 'мелко нарезанный',
+        'sliced': 'нарезанный ломтиками',
+        'grated': 'тертый',
+        'mashed': 'пюре',
+        'beaten': 'взбитый',
+        'melted': 'растопленный',
+        'softened': 'размягченный',
+        'cold': 'холодный',
+        'warm': 'теплый',
+        'hot': 'горячий'
+    }
+    
+    # Проверяем точное совпадение
     if name_lower in ingredients_dict:
         return ingredients_dict[name_lower]
+    
+    # Проверяем частичное совпадение (для фраз типа "all-purpose flour")
+    for key, value in ingredients_dict.items():
+        if key in name_lower:
+            # Заменяем найденную часть
+            return name_lower.replace(key, value)
     
     # Если нет в словаре, используем перевод
     translated = translate_to_russian(name)
@@ -343,22 +523,33 @@ def translate_recipe_data(recipe_data):
         if ingredient.get('original'):
             original = ingredient.get('original', '')
             
-            # Парсим ингредиент
-            amount, measure, name = parse_ingredient(original)
+            # Получаем отдельные части ингредиента из API
+            amount = ingredient.get('amount', '')
+            unit = ingredient.get('unit', '')
+            name = ingredient.get('name', '')
             
-            # Переводим меру и название
-            translated_measure = translate_measurement(measure) if measure else ""
+            # Переводим единицу измерения и название
+            translated_unit = translate_measurement(unit) if unit else ""
             translated_name = translate_ingredient_name(name) if name else ""
             
             # Формируем переведенную строку
-            if amount and translated_measure and translated_name:
-                translated_ingredient = f"• {amount} {translated_measure} {translated_name}"
+            if amount and translated_unit and translated_name:
+                # Если есть количество, единица и название
+                translated_ingredient = f"• {amount} {translated_unit} {translated_name}"
             elif amount and translated_name:
+                # Если есть только количество и название
                 translated_ingredient = f"• {amount} {translated_name}"
             elif translated_name:
+                # Если есть только название
                 translated_ingredient = f"• {translated_name}"
             else:
+                # Если ничего не перевелось, используем оригинал
                 translated_ingredient = f"• {original}"
+            
+            # Добавляем дополнительную информацию (например, "по желанию")
+            if ingredient.get('meta') and ingredient['meta']:
+                meta = ", ".join([translate_to_russian(m) for m in ingredient['meta']])
+                translated_ingredient += f" ({meta})"
             
             translated['ingredients'].append(translated_ingredient)
     
@@ -367,13 +558,13 @@ def translate_recipe_data(recipe_data):
         instructions = recipe_data['instructions']
         # Очищаем от HTML тегов
         instructions = re.sub('<[^<]+?>', '', instructions)
-        # Разбиваем на предложения для лучшего форматирования
-        sentences = re.split(r'(?<=[.!?])\s+', instructions)
+        # Разбиваем на шаги
+        steps = re.split(r'\n|\r\n', instructions)
         formatted_instructions = []
-        for i, sentence in enumerate(sentences, 1):
-            if sentence.strip():
-                translated_sentence = translate_to_russian(sentence.strip())
-                formatted_instructions.append(f"{i}. {translated_sentence}")
+        for i, step in enumerate(steps, 1):
+            if step.strip():
+                translated_step = translate_to_russian(step.strip())
+                formatted_instructions.append(f"{i}. {translated_step}")
         
         translated['instructions'] = "\n".join(formatted_instructions)
     else:
@@ -393,7 +584,7 @@ def translate_recipe_data(recipe_data):
         translated['cuisines'] = cuisines
     
     # Тип блюда
-    if recipe_data.get('dishTypes'):
+    if recipe_data.get('dishTypes') and recipe_data['dishTypes']:
         dish_types = [translate_to_russian(dt) for dt in recipe_data['dishTypes']]
         translated['dishTypes'] = dish_types
     
