@@ -4,6 +4,7 @@ import asyncio
 import random
 import requests
 from datetime import datetime, timedelta
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -132,8 +133,14 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== REMINDERS =====
     elif data == "rem_create":
-        context.user_data["mode"] = "REM_CREATE"
-        await q.message.reply_text("Напиши напоминание текстом")
+
+        context.user_data["mode"] = "REM_DATE"
+
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        await q.message.reply_text(
+            f"📅 Введи дату напоминания\n\nПример:\n{today}"
+    )
 
     elif data == "rem_list":
         if not REMINDERS:
@@ -233,6 +240,37 @@ async def send_recipe(q):
 # ===== TEXT HANDLER =====
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get("mode")
+    # ===== ВВОД ДАТЫ =====
+if mode == "REM_DATE":
+
+    try:
+        datetime.strptime(txt, "%Y-%m-%d")
+    except:
+        await update.message.reply_text("Формат даты: YYYY-MM-DD")
+        return
+# ===== ВВОД ВРЕМЕНИ =====
+if mode == "REM_TIME":
+
+    try:
+        datetime.strptime(txt, "%H:%M")
+    except:
+        await update.message.reply_text("Формат времени: HH:MM")
+        return
+
+    context.user_data["rem_time"] = txt
+    context.user_data["mode"] = "REM_TEXT"
+
+    await update.message.reply_text("✏️ Напиши текст напоминания")
+
+    return
+
+    context.user_data["rem_date"] = txt
+    context.user_data["mode"] = "REM_TIME"
+
+    await update.message.reply_text("🕒 Введи время\n\nПример:\n19:30")
+
+    return
+    
     txt = update.message.text.strip()
 
     if mode == "PROD_ADD":
@@ -240,22 +278,31 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         await update.message.reply_text("Добавлено")
 
-    elif mode == "REM_CREATE":
+    elif mode == "REM_TEXT":
 
-        try:
-            date_part = txt[:16]
-            text_part = txt[17:]
+    date = context.user_data.get("rem_date")
+    time = context.user_data.get("rem_time")
 
-            dt = datetime.strptime(date_part, "%Y-%m-%d %H:%M")
+    dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
 
-            REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {text_part}")
+    REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}")
 
-            context.user_data.clear()
+    delay = (dt - datetime.now()).total_seconds()
 
-            await update.message.reply_text(
-                f"⏰ Напоминание создано\n📅 {dt.strftime('%Y-%m-%d %H:%M')}\n📝 {text_part}"
-)
+    async def send_reminder():
+        await update.message.reply_text(f"⏰ Напоминание: {txt}")
 
+    scheduler.add_job(
+        lambda: asyncio.create_task(send_reminder()),
+        "date",
+        run_date=dt
+    )
+
+    context.user_data.clear()
+
+    await update.message.reply_text(
+        f"⏰ Напоминание создано\n📅 {date} {time}\n📝 {txt}"
+    )
         except:
             await update.message.reply_text(
                 "Неверный формат. Используй: YYYY-MM-DD HH:MM текст"
@@ -267,6 +314,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("План добавлен")
 
 # ===== MAIN =====
+scheduler = AsyncIOScheduler()
+scheduler.start()
+
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -277,5 +327,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
