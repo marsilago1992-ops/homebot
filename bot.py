@@ -164,6 +164,9 @@ def film_kb():
 def cook_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎲 Случайное блюдо", callback_data="cook_pick")],
+        [InlineKeyboardButton("🍳 На завтрак", callback_data="cook_breakfast")],
+        [InlineKeyboardButton("🍲 На обед", callback_data="cook_lunch"),
+         InlineKeyboardButton("🍽️ На ужин", callback_data="cook_dinner")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
     ])
 
@@ -180,6 +183,8 @@ def home_kb():
 # ===== ФУНКЦИИ ДЛЯ ПЕРЕВОДА =====
 def translate_to_russian(text):
     """Переводит текст с английского на русский используя Google Translate"""
+    if not text or text == "N/A":
+        return text
     try:
         url = "https://translate.googleapis.com/translate_a/single"
         params = {
@@ -201,71 +206,68 @@ def translate_to_russian(text):
     except:
         return text
 
-def translate_movie_data(movie_data):
-    """Переводит основные поля фильма на русский"""
-    translated = movie_data.copy()
+def translate_recipe_data(recipe_data):
+    """Переводит основные поля рецепта на русский"""
+    translated = {}
     
-    # Поля для перевода
-    fields_to_translate = {
-        'Title': 'Название',
-        'Plot': 'Сюжет',
-        'Genre': 'Жанр',
-        'Director': 'Режиссер',
-        'Writer': 'Сценарист',
-        'Actors': 'Актеры',
-        'Country': 'Страна',
-        'Language': 'Язык',
-        'Awards': 'Награды',
-        'Production': 'Производство',
-        'Type': 'Тип'
-    }
+    # Название блюда
+    if recipe_data.get('title'):
+        translated['title'] = translate_to_russian(recipe_data['title'])
+    else:
+        translated['title'] = "Неизвестное блюдо"
     
-    # Переводим значения
-    for eng_field, ru_field in fields_to_translate.items():
-        if movie_data.get(eng_field) and movie_data[eng_field] != "N/A":
-            translated[eng_field] = translate_to_russian(movie_data[eng_field])
+    # Ингредиенты
+    translated['ingredients'] = []
+    for ingredient in recipe_data.get('extendedIngredients', []):
+        if ingredient.get('original'):
+            # Переводим название ингредиента
+            translated_name = translate_to_russian(ingredient.get('name', ''))
+            # Сохраняем оригинальное количество и единицы измерения
+            original = ingredient.get('original', '')
+            # Пытаемся перевести меру, если есть
+            translated['ingredients'].append(f"• {original}")
     
-    # Рейтинг не переводим, но добавляем русскую метку
-    if movie_data.get('imdbRating') and movie_data['imdbRating'] != "N/A":
-        translated['imdbRating'] = movie_data['imdbRating']
+    # Инструкции
+    if recipe_data.get('instructions'):
+        instructions = recipe_data['instructions']
+        # Очищаем от HTML тегов
+        import re
+        instructions = re.sub('<[^<]+?>', '', instructions)
+        translated['instructions'] = translate_to_russian(instructions)
+    else:
+        translated['instructions'] = None
     
-    # Год выпуска не переводим
-    if movie_data.get('Year'):
-        translated['Year'] = movie_data['Year']
+    # Время приготовления
+    if recipe_data.get('readyInMinutes'):
+        translated['readyInMinutes'] = recipe_data['readyInMinutes']
     
-    # Постер не переводим
-    if movie_data.get('Poster'):
-        translated['Poster'] = movie_data['Poster']
+    # Количество порций
+    if recipe_data.get('servings'):
+        translated['servings'] = recipe_data['servings']
+    
+    # Кухня (если есть)
+    if recipe_data.get('cuisines') and recipe_data['cuisines']:
+        cuisines = [translate_to_russian(cuisine) for cuisine in recipe_data['cuisines']]
+        translated['cuisines'] = cuisines
+    
+    # Тип блюда (завтрак/обед/ужин)
+    if recipe_data.get('dishTypes'):
+        translated['dishTypes'] = recipe_data['dishTypes']
+    
+    # Изображение
+    if recipe_data.get('image'):
+        translated['image'] = recipe_data['image']
     
     return translated
 
-def get_russian_genre(english_genre):
-    """Переводит жанры фильмов на русский"""
-    genres = {
-        "Action": "Боевик",
-        "Adventure": "Приключения",
-        "Animation": "Мультфильм",
-        "Biography": "Биография",
-        "Comedy": "Комедия",
-        "Crime": "Криминал",
-        "Documentary": "Документальный",
-        "Drama": "Драма",
-        "Family": "Семейный",
-        "Fantasy": "Фэнтези",
-        "Film-Noir": "Нуар",
-        "History": "История",
-        "Horror": "Ужасы",
-        "Music": "Музыка",
-        "Musical": "Мюзикл",
-        "Mystery": "Мистика",
-        "Romance": "Мелодрама",
-        "Sci-Fi": "Фантастика",
-        "Sport": "Спорт",
-        "Thriller": "Триллер",
-        "War": "Военный",
-        "Western": "Вестерн"
+def get_meal_type_description(meal_type):
+    """Возвращает описание типа приема пищи"""
+    descriptions = {
+        "breakfast": "🍳 ЗАВТРАК",
+        "lunch": "🍲 ОБЕД",
+        "dinner": "🍽️ УЖИН"
     }
-    return genres.get(english_genre, english_genre)
+    return descriptions.get(meal_type, "🍳 БЛЮДО")
 
 # ===== BUTTONS =====
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -290,7 +292,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif data == "cook":
-        await q.message.reply_text("Рецепты:", reply_markup=cook_kb())
+        await q.message.reply_text("🍳 Что приготовить?", reply_markup=cook_kb())
         return
 
     elif data == "home":
@@ -392,7 +394,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== COOK PICK =====
     elif data == "cook_pick":
-        await send_recipe(q, context)
+        await send_recipe(q, context, meal_type=None)
+    elif data == "cook_breakfast":
+        await send_recipe(q, context, meal_type="breakfast")
+    elif data == "cook_lunch":
+        await send_recipe(q, context, meal_type="lunch")
+    elif data == "cook_dinner":
+        await send_recipe(q, context, meal_type="dinner")
 
 async def handle_calendar(q, context, data):
     """Обработка нажатий на календарь"""
@@ -625,14 +633,93 @@ async def send_movie(q, context, mood=None, genre=None):
         logging.error(f"Неожиданная ошибка в send_movie: {e}")
         await q.message.reply_text("Произошла ошибка при поиске фильма")
 
+def translate_movie_data(movie_data):
+    """Переводит основные поля фильма на русский"""
+    translated = movie_data.copy()
+    
+    # Поля для перевода
+    fields_to_translate = {
+        'Title': 'Название',
+        'Plot': 'Сюжет',
+        'Genre': 'Жанр',
+        'Director': 'Режиссер',
+        'Writer': 'Сценарист',
+        'Actors': 'Актеры',
+        'Country': 'Страна',
+        'Language': 'Язык',
+        'Awards': 'Награды',
+        'Production': 'Производство',
+        'Type': 'Тип'
+    }
+    
+    # Переводим значения
+    for eng_field, ru_field in fields_to_translate.items():
+        if movie_data.get(eng_field) and movie_data[eng_field] != "N/A":
+            translated[eng_field] = translate_to_russian(movie_data[eng_field])
+    
+    # Рейтинг не переводим, но добавляем русскую метку
+    if movie_data.get('imdbRating') and movie_data['imdbRating'] != "N/A":
+        translated['imdbRating'] = movie_data['imdbRating']
+    
+    # Год выпуска не переводим
+    if movie_data.get('Year'):
+        translated['Year'] = movie_data['Year']
+    
+    # Постер не переводим
+    if movie_data.get('Poster'):
+        translated['Poster'] = movie_data['Poster']
+    
+    return translated
+
+def get_russian_genre(english_genre):
+    """Переводит жанры фильмов на русский"""
+    genres = {
+        "Action": "Боевик",
+        "Adventure": "Приключения",
+        "Animation": "Мультфильм",
+        "Biography": "Биография",
+        "Comedy": "Комедия",
+        "Crime": "Криминал",
+        "Documentary": "Документальный",
+        "Drama": "Драма",
+        "Family": "Семейный",
+        "Fantasy": "Фэнтези",
+        "Film-Noir": "Нуар",
+        "History": "История",
+        "Horror": "Ужасы",
+        "Music": "Музыка",
+        "Musical": "Мюзикл",
+        "Mystery": "Мистика",
+        "Romance": "Мелодрама",
+        "Sci-Fi": "Фантастика",
+        "Sport": "Спорт",
+        "Thriller": "Триллер",
+        "War": "Военный",
+        "Western": "Вестерн"
+    }
+    return genres.get(english_genre, english_genre)
+
 # ===== RECIPE =====
-async def send_recipe(q, context):
+async def send_recipe(q, context, meal_type=None):
     if not SPOON_KEY:
         await q.message.reply_text("Spoonacular API ключ не настроен")
         return
     
     try:
+        # Формируем URL в зависимости от типа приема пищи
         url = f"https://api.spoonacular.com/recipes/random?apiKey={SPOON_KEY}&number=1"
+        
+        # Добавляем теги для типа приема пищи
+        if meal_type:
+            meal_tags = {
+                "breakfast": "breakfast",
+                "lunch": "lunch",
+                "dinner": "dinner"
+            }
+            tag = meal_tags.get(meal_type)
+            if tag:
+                url += f"&tags={tag}"
+        
         response = requests.get(url, timeout=10)
         
         if response.status_code != 200:
@@ -644,33 +731,58 @@ async def send_recipe(q, context):
             await q.message.reply_text("Не удалось найти рецепт")
             return
             
-        r = data["recipes"][0]
-        title = r.get("title", "Неизвестное блюдо")
-        img = r.get("image")
+        recipe = data["recipes"][0]
         
-        # Форматируем ингредиенты
-        ingredients = []
-        for i in r.get("extendedIngredients", []):
-            original = i.get("original", "")
-            if original:
-                ingredients.append(f"• {original}")
+        # Переводим данные рецепта
+        translated = translate_recipe_data(recipe)
         
-        if ingredients:
-            ingredients_text = "\n".join(ingredients)
-            text = f"🍳 {title}\n\n🧾 Ингредиенты:\n{ingredients_text}"
+        # Формируем текст на русском
+        title = translated.get('title', 'Неизвестное блюдо')
+        
+        # Заголовок с типом приема пищи
+        if meal_type:
+            meal_header = get_meal_type_description(meal_type)
+            text_parts = [f"{meal_header}\n🍳 *{title}*"]
         else:
-            text = f"🍳 {title}"
+            text_parts = [f"🍳 *{title}*"]
         
-        # Добавляем инструкцию если есть
-        if r.get("instructions"):
-            # Ограничиваем длину инструкции
-            instructions = r.get("instructions")[:500] + "..." if len(r.get("instructions", "")) > 500 else r.get("instructions")
-            text += f"\n\n📝 Приготовление:\n{instructions}"
+        # Время приготовления
+        if translated.get('readyInMinutes'):
+            text_parts.append(f"⏱️ Время приготовления: {translated['readyInMinutes']} минут")
         
-        if img:
-            await q.message.reply_photo(img, caption=text)
+        # Количество порций
+        if translated.get('servings'):
+            text_parts.append(f"👥 Порций: {translated['servings']}")
+        
+        # Кухня
+        if translated.get('cuisines') and translated['cuisines']:
+            cuisines_text = ", ".join(translated['cuisines'])
+            text_parts.append(f"🍜 Кухня: {cuisines_text}")
+        
+        # Ингредиенты
+        if translated.get('ingredients'):
+            text_parts.append("\n🧾 *Ингредиенты:*")
+            # Берем первые 10 ингредиентов, если их много
+            ingredients = translated['ingredients'][:10]
+            text_parts.extend(ingredients)
+            if len(translated['ingredients']) > 10:
+                text_parts.append(f"... и еще {len(translated['ingredients']) - 10} ингредиентов")
+        
+        # Инструкции
+        if translated.get('instructions'):
+            instructions = translated['instructions']
+            # Ограничиваем длину
+            if len(instructions) > 500:
+                instructions = instructions[:500] + "..."
+            text_parts.append(f"\n📝 *Приготовление:*\n{instructions}")
+        
+        final_text = "\n".join(text_parts)
+        
+        # Отправляем фото если есть
+        if translated.get('image'):
+            await q.message.reply_photo(translated['image'], caption=final_text, parse_mode='Markdown')
         else:
-            await q.message.reply_text(text)
+            await q.message.reply_text(final_text, parse_mode='Markdown')
             
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при запросе к Spoonacular API: {e}")
