@@ -3,6 +3,7 @@ import logging
 import asyncio
 import random
 import requests
+import calendar
 from datetime import datetime, timedelta
 from telegram import (
     Update,
@@ -65,6 +66,89 @@ def rem_kb():
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
     ])
 
+# ===== КАЛЕНДАРЬ ДЛЯ НАПОМИНАНИЙ =====
+def create_calendar_kb(year=None, month=None):
+    """Создает клавиатуру-календарь для выбора даты"""
+    now = datetime.now()
+    if year is None:
+        year = now.year
+    if month is None:
+        month = now.month
+    
+    # Заголовок с месяцем и годом
+    keyboard = []
+    
+    # Кнопки навигации по месяцам
+    nav_row = []
+    nav_row.append(InlineKeyboardButton("◀️", callback_data=f"cal_prev:{year}:{month}"))
+    nav_row.append(InlineKeyboardButton(f"{calendar.month_name[month]} {year}", callback_data="cal_ignore"))
+    nav_row.append(InlineKeyboardButton("▶️", callback_data=f"cal_next:{year}:{month}"))
+    keyboard.append(nav_row)
+    
+    # Дни недели
+    week_days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    keyboard.append([InlineKeyboardButton(day, callback_data="cal_ignore") for day in week_days])
+    
+    # Календарь
+    month_calendar = calendar.monthcalendar(year, month)
+    for week in month_calendar:
+        row = []
+        for day in week:
+            if day == 0:
+                row.append(InlineKeyboardButton(" ", callback_data="cal_ignore"))
+            else:
+                # Проверяем, что дата не в прошлом
+                date = datetime(year, month, day)
+                if date.date() < now.date():
+                    row.append(InlineKeyboardButton(f"{day}", callback_data="cal_ignore"))
+                else:
+                    row.append(InlineKeyboardButton(f"{day}", callback_data=f"cal_date:{year}:{month}:{day}"))
+        keyboard.append(row)
+    
+    # Кнопка "Сегодня" и "Отмена"
+    keyboard.append([
+        InlineKeyboardButton("📅 Сегодня", callback_data=f"cal_today"),
+        InlineKeyboardButton("❌ Отмена", callback_data="back")
+    ])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def create_time_kb():
+    """Создает клавиатуру для выбора времени с шагом 1 час"""
+    keyboard = []
+    
+    # Часы с шагом 1 час (0-23)
+    hours_row1 = []
+    hours_row2 = []
+    hours_row3 = []
+    
+    for h in range(0, 24):
+        btn = InlineKeyboardButton(f"{h:02d}:00", callback_data=f"time_hour:{h}")
+        if h < 8:
+            hours_row1.append(btn)
+        elif h < 16:
+            hours_row2.append(btn)
+        else:
+            hours_row3.append(btn)
+    
+    keyboard.append(hours_row1)
+    keyboard.append(hours_row2)
+    keyboard.append(hours_row3)
+    
+    # Кнопка "Текущее время"
+    now = datetime.now()
+    keyboard.append([
+        InlineKeyboardButton(f"🕐 Сейчас ({now.hour:02d}:{now.minute:02d})", callback_data=f"time_now")
+    ])
+    
+    # Навигация
+    keyboard.append([
+        InlineKeyboardButton("⬅️ Назад к дате", callback_data="rem_create"),
+        InlineKeyboardButton("❌ Отмена", callback_data="back")
+    ])
+    
+    return InlineKeyboardMarkup(keyboard)
+
 # ===== MOVIES =====
 def film_kb():
     return InlineKeyboardMarkup([
@@ -92,6 +176,96 @@ def home_kb():
         [InlineKeyboardButton("❌ Удалить", callback_data="home_del")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back")],
     ])
+
+# ===== ФУНКЦИИ ДЛЯ ПЕРЕВОДА =====
+def translate_to_russian(text):
+    """Переводит текст с английского на русский используя Google Translate"""
+    try:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {
+            "client": "gtx",
+            "sl": "en",
+            "tl": "ru",
+            "dt": "t",
+            "q": text
+        }
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            result = response.json()
+            translated = ""
+            for sentence in result[0]:
+                if sentence[0]:
+                    translated += sentence[0]
+            return translated
+        return text
+    except:
+        return text
+
+def translate_movie_data(movie_data):
+    """Переводит основные поля фильма на русский"""
+    translated = movie_data.copy()
+    
+    # Поля для перевода
+    fields_to_translate = {
+        'Title': 'Название',
+        'Plot': 'Сюжет',
+        'Genre': 'Жанр',
+        'Director': 'Режиссер',
+        'Writer': 'Сценарист',
+        'Actors': 'Актеры',
+        'Country': 'Страна',
+        'Language': 'Язык',
+        'Awards': 'Награды',
+        'Production': 'Производство',
+        'Type': 'Тип'
+    }
+    
+    # Переводим значения
+    for eng_field, ru_field in fields_to_translate.items():
+        if movie_data.get(eng_field) and movie_data[eng_field] != "N/A":
+            translated[eng_field] = translate_to_russian(movie_data[eng_field])
+    
+    # Рейтинг не переводим, но добавляем русскую метку
+    if movie_data.get('imdbRating') and movie_data['imdbRating'] != "N/A":
+        translated['imdbRating'] = movie_data['imdbRating']
+    
+    # Год выпуска не переводим
+    if movie_data.get('Year'):
+        translated['Year'] = movie_data['Year']
+    
+    # Постер не переводим
+    if movie_data.get('Poster'):
+        translated['Poster'] = movie_data['Poster']
+    
+    return translated
+
+def get_russian_genre(english_genre):
+    """Переводит жанры фильмов на русский"""
+    genres = {
+        "Action": "Боевик",
+        "Adventure": "Приключения",
+        "Animation": "Мультфильм",
+        "Biography": "Биография",
+        "Comedy": "Комедия",
+        "Crime": "Криминал",
+        "Documentary": "Документальный",
+        "Drama": "Драма",
+        "Family": "Семейный",
+        "Fantasy": "Фэнтези",
+        "Film-Noir": "Нуар",
+        "History": "История",
+        "Horror": "Ужасы",
+        "Music": "Музыка",
+        "Musical": "Мюзикл",
+        "Mystery": "Мистика",
+        "Romance": "Мелодрама",
+        "Sci-Fi": "Фантастика",
+        "Sport": "Спорт",
+        "Thriller": "Триллер",
+        "War": "Военный",
+        "Western": "Вестерн"
+    }
+    return genres.get(english_genre, english_genre)
 
 # ===== BUTTONS =====
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -149,21 +323,36 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== REMINDERS =====
     elif data == "rem_create":
-        context.user_data["mode"] = "REM_CREATE"
-        await q.message.reply_text("Напиши напоминание в формате: YYYY-MM-DD HH:MM текст")
+        context.user_data["mode"] = "REM_DATE"
+        await q.message.reply_text(
+            "Выберите дату для напоминания:",
+            reply_markup=create_calendar_kb()
+        )
+        return
+    
+    # Обработка календаря
+    elif data.startswith("cal_"):
+        await handle_calendar(q, context, data)
+        return
+    
+    # Обработка времени
+    elif data.startswith("time_"):
+        await handle_time(q, context, data)
         return
 
     elif data == "rem_list":
         if not REMINDERS:
             await q.message.reply_text("Напоминаний нет")
         else:
-            txt = "\n".join([f"• {r}" for r in REMINDERS])
+            # Сортируем напоминания по дате
+            sorted_reminders = sorted(REMINDERS, key=lambda x: datetime.strptime(x.split(" — ")[0], "%Y-%m-%d %H:%M"))
+            txt = "\n".join([f"• {r}" for r in sorted_reminders])
             await q.message.reply_text(f"⏰ Напоминания:\n{txt}")
         return
 
     elif data == "rem_del":
         REMINDERS.clear()
-        await q.message.reply_text("Напоминания удалены")
+        await q.message.reply_text("Все напоминания удалены")
         return
 
     # ===== HOME =====
@@ -205,6 +394,129 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cook_pick":
         await send_recipe(q, context)
 
+async def handle_calendar(q, context, data):
+    """Обработка нажатий на календарь"""
+    parts = data.split(":")
+    
+    if data.startswith("cal_prev"):
+        year, month = int(parts[1]), int(parts[2])
+        if month == 1:
+            month = 12
+            year -= 1
+        else:
+            month -= 1
+        await q.message.edit_text(
+            "Выберите дату для напоминания:",
+            reply_markup=create_calendar_kb(year, month)
+        )
+    
+    elif data.startswith("cal_next"):
+        year, month = int(parts[1]), int(parts[2])
+        if month == 12:
+            month = 1
+            year += 1
+        else:
+            month += 1
+        await q.message.edit_text(
+            "Выберите дату для напоминания:",
+            reply_markup=create_calendar_kb(year, month)
+        )
+    
+    elif data.startswith("cal_today"):
+        now = datetime.now()
+        context.user_data["reminder_date"] = now.date()
+        await q.message.edit_text(
+            f"Выбрана дата: {now.strftime('%Y-%m-%d')}\nТеперь выберите время:",
+            reply_markup=create_time_kb()
+        )
+    
+    elif data.startswith("cal_date"):
+        year, month, day = int(parts[1]), int(parts[2]), int(parts[3])
+        selected_date = datetime(year, month, day).date()
+        context.user_data["reminder_date"] = selected_date
+        await q.message.edit_text(
+            f"Выбрана дата: {selected_date.strftime('%Y-%m-%d')}\nТеперь выберите время:",
+            reply_markup=create_time_kb()
+        )
+    
+    elif data == "cal_ignore":
+        # Игнорируем нажатия на пустые кнопки
+        pass
+
+async def handle_time(q, context, data):
+    """Обработка выбора времени"""
+    parts = data.split(":")
+    
+    if data.startswith("time_hour"):
+        hour = int(parts[1])
+        date = context.user_data["reminder_date"]
+        
+        # Создаем datetime с выбранным часом и текущими минутами (00)
+        reminder_datetime = datetime.combine(date, datetime.min.time().replace(hour=hour, minute=0))
+        
+        # Проверяем, что время не в прошлом
+        now = datetime.now()
+        if reminder_datetime < now:
+            # Если выбран сегодняшний день и время уже прошло, предлагаем следующий час
+            if reminder_datetime.date() == now.date():
+                await q.message.edit_text(
+                    f"❌ Выбранное время {hour:02d}:00 уже прошло.\n"
+                    f"Пожалуйста, выберите другое время:",
+                    reply_markup=create_time_kb()
+                )
+                return
+        
+        context.user_data["reminder_datetime"] = reminder_datetime
+        
+        # Показываем подтверждение и запрашиваем текст
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Подтвердить", callback_data="time_confirm")],
+            [InlineKeyboardButton("⬅️ Назад к дате", callback_data="rem_create")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="back")]
+        ])
+        
+        await q.message.edit_text(
+            f"✅ Выбрано:\n"
+            f"📅 {reminder_datetime.strftime('%Y-%m-%d')}\n"
+            f"⏰ {reminder_datetime.strftime('%H:%M')}\n\n"
+            f"Теперь напишите текст напоминания:",
+            reply_markup=keyboard
+        )
+        
+        context.user_data["mode"] = "REM_TEXT"
+    
+    elif data.startswith("time_now"):
+        now = datetime.now()
+        date = context.user_data["reminder_date"]
+        
+        # Используем текущее время, но округляем минуты до ближайших 5 минут вперед
+        current_hour = now.hour
+        current_minute = now.minute
+        
+        # Если выбрана сегодняшняя дата и текущее время, добавляем 5 минут
+        if date == now.date():
+            reminder_datetime = now + timedelta(minutes=5)
+        else:
+            reminder_datetime = datetime.combine(date, datetime.min.time().replace(hour=current_hour, minute=current_minute))
+        
+        context.user_data["reminder_datetime"] = reminder_datetime
+        
+        # Показываем подтверждение и запрашиваем текст
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Подтвердить", callback_data="time_confirm")],
+            [InlineKeyboardButton("⬅️ Назад к дате", callback_data="rem_create")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="back")]
+        ])
+        
+        await q.message.edit_text(
+            f"✅ Выбрано:\n"
+            f"📅 {reminder_datetime.strftime('%Y-%m-%d')}\n"
+            f"⏰ {reminder_datetime.strftime('%H:%M')}\n\n"
+            f"Теперь напишите текст напоминания:",
+            reply_markup=keyboard
+        )
+        
+        context.user_data["mode"] = "REM_TEXT"
 
 # ===== MOVIE =====
 async def send_movie(q, context, mood=None, genre=None):
@@ -214,15 +526,23 @@ async def send_movie(q, context, mood=None, genre=None):
     
     try:
         # Пробуем разные годы для поиска
-        for _ in range(3):  # Делаем до 3 попыток найти фильм
+        for attempt in range(3):
             year = random.randint(1990, 2024)
-            search_url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}&s=movie&y={year}&type=movie"
+            
+            # Формируем поисковый запрос
+            search_params = {
+                "apikey": OMDB_KEY,
+                "s": "movie",
+                "y": year,
+                "type": "movie"
+            }
             
             # Добавляем жанр если указан
             if genre:
-                search_url += f"&genre={genre}"
+                # Используем английское название жанра для поиска
+                search_params["s"] = f"movie {genre}"
             
-            response = requests.get(search_url, timeout=10)
+            response = requests.get("http://www.omdbapi.com/", params=search_params, timeout=10)
             data = response.json()
             
             if data.get("Response") == "True" and data.get("Search"):
@@ -230,27 +550,69 @@ async def send_movie(q, context, mood=None, genre=None):
                 m = random.choice(movies)
                 
                 # Получаем детальную информацию
-                detail_url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}&i={m['imdbID']}&plot=full"
-                detail_response = requests.get(detail_url, timeout=10)
+                detail_params = {
+                    "apikey": OMDB_KEY,
+                    "i": m['imdbID'],
+                    "plot": "full"
+                }
+                detail_response = requests.get("http://www.omdbapi.com/", params=detail_params, timeout=10)
                 detail = detail_response.json()
                 
                 if detail.get("Response") == "True":
-                    title = detail.get('Title', 'Неизвестно')
-                    year = detail.get('Year', 'Неизвестно')
-                    rating = detail.get('imdbRating', 'N/A')
-                    plot = detail.get('Plot', 'Описание отсутствует')
+                    # Переводим данные на русский
+                    translated = translate_movie_data(detail)
                     
-                    text = f"🎬 {title} ({year})\n⭐ {rating}\n\n{plot}"
+                    # Формируем текст на русском
+                    title = translated.get('Title', 'Неизвестно')
+                    year = translated.get('Year', 'Неизвестно')
+                    rating = translated.get('imdbRating', 'N/A')
                     
-                    # Добавляем информацию о жанре если есть
-                    if detail.get('Genre'):
-                        text = f"🎬 {title} ({year})\n📺 {detail.get('Genre')}\n⭐ {rating}\n\n{plot}"
+                    # Переводим рейтинг
+                    if rating != 'N/A':
+                        rating_text = f"⭐ Рейтинг IMDb: {rating}"
+                    else:
+                        rating_text = "⭐ Рейтинг: Н/Д"
+                    
+                    # Формируем основную информацию
+                    text_parts = [f"🎬 *{title}* ({year})", rating_text]
+                    
+                    # Добавляем жанр на русском
+                    if detail.get('Genre') and detail['Genre'] != "N/A":
+                        genres = detail['Genre'].split(', ')
+                        russian_genres = [get_russian_genre(g) for g in genres]
+                        text_parts.append(f"📺 Жанр: {', '.join(russian_genres)}")
+                    
+                    # Добавляем сюжет
+                    if translated.get('Plot') and translated['Plot'] != "N/A":
+                        plot = translated['Plot']
+                        if len(plot) > 300:
+                            plot = plot[:300] + "..."
+                        text_parts.append(f"\n📝 {plot}")
+                    
+                    # Добавляем режиссера
+                    if translated.get('Director') and translated['Director'] != "N/A":
+                        text_parts.append(f"🎬 Режиссер: {translated['Director']}")
+                    
+                    # Добавляем актеров (первые 3)
+                    if translated.get('Actors') and translated['Actors'] != "N/A":
+                        actors = translated['Actors'].split(', ')[:3]
+                        text_parts.append(f"👥 В ролях: {', '.join(actors)}")
+                    
+                    # Добавляем страну
+                    if translated.get('Country') and translated['Country'] != "N/A":
+                        text_parts.append(f"🌍 Страна: {translated['Country']}")
+                    
+                    # Добавляем продолжительность
+                    if detail.get('Runtime') and detail['Runtime'] != "N/A":
+                        text_parts.append(f"⏱️ {detail['Runtime']}")
+                    
+                    final_text = "\n".join(text_parts)
                     
                     poster = detail.get("Poster")
                     if poster and poster != "N/A":
-                        await q.message.reply_photo(poster, caption=text)
+                        await q.message.reply_photo(poster, caption=final_text, parse_mode='Markdown')
                     else:
-                        await q.message.reply_text(text)
+                        await q.message.reply_text(final_text, parse_mode='Markdown')
                     return
         
         # Если не нашли фильмы
@@ -331,53 +693,34 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ Нельзя добавить пустой продукт")
 
-    elif mode == "REM_CREATE":
-        try:
-            # Проверяем формат даты и времени
-            if len(txt) < 16:
-                await update.message.reply_text(
-                    "❌ Слишком короткое сообщение.\n"
-                    "Используй формат: YYYY-MM-DD HH:MM текст\n"
-                    "Пример: 2024-12-31 18:00 Купить подарки"
-                )
-                return
-                
-            date_part = txt[:16]
-            text_part = txt[16:].strip()
-            
-            if not text_part:
-                await update.message.reply_text(
-                    "❌ Добавьте текст напоминания после даты и времени"
-                )
-                return
-
-            dt = datetime.strptime(date_part, "%Y-%m-%d %H:%M")
+    elif mode == "REM_TEXT":
+        if "reminder_datetime" in context.user_data:
+            dt = context.user_data["reminder_datetime"]
             
             # Проверяем, что дата не в прошлом
             if dt < datetime.now():
                 await update.message.reply_text(
-                    "❌ Нельзя создать напоминание на прошедшую дату"
+                    "❌ Нельзя создать напоминание на прошедшую дату.\n"
+                    "Попробуйте снова через меню Напоминания."
                 )
+                context.user_data.clear()
                 return
 
-            REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {text_part}")
-            context.user_data.clear()
+            reminder_text = f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}"
+            REMINDERS.append(reminder_text)
+            
+            # Сортируем напоминания
+            REMINDERS.sort(key=lambda x: datetime.strptime(x.split(" — ")[0], "%Y-%m-%d %H:%M"))
 
             await update.message.reply_text(
                 f"✅ Напоминание создано:\n"
                 f"📅 {dt.strftime('%Y-%m-%d %H:%M')}\n"
-                f"📝 {text_part}"
+                f"📝 {txt}"
             )
-
-        except ValueError as e:
-            await update.message.reply_text(
-                "❌ Неверный формат даты и времени.\n"
-                "Используй: YYYY-MM-DD HH:MM текст\n"
-                "Пример: 2024-12-31 18:00 Купить подарки"
-            )
-        except Exception as e:
-            logging.error(f"Ошибка при создании напоминания: {e}")
-            await update.message.reply_text("❌ Произошла ошибка при создании напоминания")
+        else:
+            await update.message.reply_text("❌ Ошибка: не выбрана дата и время")
+        
+        context.user_data.clear()
 
     elif mode == "HOME_ADD":
         if txt:
