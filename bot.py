@@ -280,14 +280,14 @@ if mode == "REM_TIME":
 
     elif mode == "REM_TEXT":
 
-    date = context.user_data.get("rem_date")
-    time = context.user_data.get("rem_time")
+        date = context.user_data.get("rem_date")
+        time = context.user_data.get("rem_time")
 
-    dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+        dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
 
-    REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}")
+        REMINDERS.append(f"{dt.strftime('%Y-%m-%d %H:%M')} — {txt}")
 
-    delay = (dt - datetime.now()).total_seconds()
+        delay = (dt - datetime.now()).total_seconds()
 
     async def send_reminder():
         await update.message.reply_text(f"⏰ Напоминание: {txt}")
@@ -327,6 +327,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
