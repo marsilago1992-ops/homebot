@@ -4,11 +4,12 @@ import asyncio
 import random
 import requests
 import calendar
+import re
 from datetime import datetime, timedelta
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup,
+    InlineKeyboardMarkay,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -107,7 +108,7 @@ def create_calendar_kb(year=None, month=None):
     
     # Кнопка "Сегодня" и "Отмена"
     keyboard.append([
-        InlineKeyboardButton("📅 Сегодня", callback_data=f"cal_today"),
+        InlineKeyboardButton("📅 Сегодня", callback_data="cal_today"),
         InlineKeyboardButton("❌ Отмена", callback_data="back")
     ])
     
@@ -138,7 +139,7 @@ def create_time_kb():
     # Кнопка "Текущее время"
     now = datetime.now()
     keyboard.append([
-        InlineKeyboardButton(f"🕐 Сейчас ({now.hour:02d}:{now.minute:02d})", callback_data=f"time_now")
+        InlineKeyboardButton(f"🕐 Сейчас ({now.hour:02d}:{now.minute:02d})", callback_data="time_now")
     ])
     
     # Навигация
@@ -203,8 +204,128 @@ def translate_to_russian(text):
                     translated += sentence[0]
             return translated
         return text
-    except:
+    except Exception as e:
+        logging.error(f"Ошибка перевода: {e}")
         return text
+
+def parse_ingredient(ingredient_string):
+    """Парсит строку ингредиента на количество, единицу измерения и название"""
+    # Пробуем разные паттерны
+    patterns = [
+        r'^([\d\s\.,/]+)\s+([a-zA-Z\s]+)\s+(.+)$',  # "2 cups flour"
+        r'^([\d\s\.,/]+)\s+([a-zA-Z]+)\s+(.+)$',    # "2 tbsp sugar"
+        r'^([\d\s\.,/]+)\s+(.+)$',                    # "2 apples"
+        r'^(.+)$'                                      # просто название
+    ]
+    
+    for pattern in patterns:
+        match = re.match(pattern, ingredient_string.strip())
+        if match:
+            groups = match.groups()
+            if len(groups) == 3:
+                return groups[0].strip(), groups[1].strip(), groups[2].strip()
+            elif len(groups) == 2:
+                return groups[0].strip(), "", groups[1].strip()
+            else:
+                return "", "", groups[0].strip()
+    
+    return "", "", ingredient_string.strip()
+
+def translate_measurement(measure):
+    """Переводит единицы измерения на русский"""
+    measurements = {
+        'tsp': 'ч.л.',
+        'teaspoon': 'ч.л.',
+        'teaspoons': 'ч.л.',
+        'tbsp': 'ст.л.',
+        'tablespoon': 'ст.л.',
+        'tablespoons': 'ст.л.',
+        'cup': 'стакан',
+        'cups': 'стакана',
+        'oz': 'унция',
+        'ounce': 'унция',
+        'ounces': 'унций',
+        'lb': 'фунт',
+        'pound': 'фунт',
+        'pounds': 'фунтов',
+        'g': 'г',
+        'gram': 'г',
+        'grams': 'г',
+        'kg': 'кг',
+        'kilogram': 'кг',
+        'kilograms': 'кг',
+        'ml': 'мл',
+        'milliliter': 'мл',
+        'milliliters': 'мл',
+        'l': 'л',
+        'liter': 'л',
+        'liters': 'л',
+        'pinch': 'щепотка',
+        'pinches': 'щепотки',
+        'dash': 'капля',
+        'dashes': 'капли',
+        'clove': 'зубчик',
+        'cloves': 'зубчика',
+        'piece': 'шт',
+        'pieces': 'шт',
+        'slice': 'ломтик',
+        'slices': 'ломтика',
+        'can': 'банка',
+        'cans': 'банки',
+        'package': 'упаковка',
+        'packages': 'упаковки',
+        'bunch': 'пучок',
+        'bunches': 'пучка'
+    }
+    return measurements.get(measure.lower(), measure)
+
+def translate_ingredient_name(name):
+    """Переводит название ингредиента"""
+    # Словарь распространенных ингредиентов
+    ingredients_dict = {
+        'flour': 'мука',
+        'sugar': 'сахар',
+        'salt': 'соль',
+        'pepper': 'перец',
+        'butter': 'масло сливочное',
+        'oil': 'масло растительное',
+        'egg': 'яйцо',
+        'eggs': 'яйца',
+        'milk': 'молоко',
+        'water': 'вода',
+        'chicken': 'курица',
+        'beef': 'говядина',
+        'pork': 'свинина',
+        'fish': 'рыба',
+        'rice': 'рис',
+        'pasta': 'паста',
+        'cheese': 'сыр',
+        'onion': 'лук',
+        'garlic': 'чеснок',
+        'tomato': 'помидор',
+        'potato': 'картофель',
+        'carrot': 'морковь',
+        'apple': 'яблоко',
+        'banana': 'банан',
+        'lemon': 'лимон',
+        'orange': 'апельсин',
+        'bread': 'хлеб',
+        'butter': 'масло',
+        'cream': 'сливки',
+        'yogurt': 'йогурт',
+        'honey': 'мед',
+        'vanilla': 'ваниль',
+        'cinnamon': 'корица',
+        'chocolate': 'шоколад'
+    }
+    
+    name_lower = name.lower().strip()
+    if name_lower in ingredients_dict:
+        return ingredients_dict[name_lower]
+    
+    # Если нет в словаре, используем перевод
+    translated = translate_to_russian(name)
+    return translated
 
 def translate_recipe_data(recipe_data):
     """Переводит основные поля рецепта на русский"""
@@ -216,24 +337,45 @@ def translate_recipe_data(recipe_data):
     else:
         translated['title'] = "Неизвестное блюдо"
     
-    # Ингредиенты
+    # Ингредиенты с полным переводом
     translated['ingredients'] = []
     for ingredient in recipe_data.get('extendedIngredients', []):
         if ingredient.get('original'):
-            # Переводим название ингредиента
-            translated_name = translate_to_russian(ingredient.get('name', ''))
-            # Сохраняем оригинальное количество и единицы измерения
             original = ingredient.get('original', '')
-            # Пытаемся перевести меру, если есть
-            translated['ingredients'].append(f"• {original}")
+            
+            # Парсим ингредиент
+            amount, measure, name = parse_ingredient(original)
+            
+            # Переводим меру и название
+            translated_measure = translate_measurement(measure) if measure else ""
+            translated_name = translate_ingredient_name(name) if name else ""
+            
+            # Формируем переведенную строку
+            if amount and translated_measure and translated_name:
+                translated_ingredient = f"• {amount} {translated_measure} {translated_name}"
+            elif amount and translated_name:
+                translated_ingredient = f"• {amount} {translated_name}"
+            elif translated_name:
+                translated_ingredient = f"• {translated_name}"
+            else:
+                translated_ingredient = f"• {original}"
+            
+            translated['ingredients'].append(translated_ingredient)
     
     # Инструкции
     if recipe_data.get('instructions'):
         instructions = recipe_data['instructions']
         # Очищаем от HTML тегов
-        import re
         instructions = re.sub('<[^<]+?>', '', instructions)
-        translated['instructions'] = translate_to_russian(instructions)
+        # Разбиваем на предложения для лучшего форматирования
+        sentences = re.split(r'(?<=[.!?])\s+', instructions)
+        formatted_instructions = []
+        for i, sentence in enumerate(sentences, 1):
+            if sentence.strip():
+                translated_sentence = translate_to_russian(sentence.strip())
+                formatted_instructions.append(f"{i}. {translated_sentence}")
+        
+        translated['instructions'] = "\n".join(formatted_instructions)
     else:
         translated['instructions'] = None
     
@@ -250,13 +392,22 @@ def translate_recipe_data(recipe_data):
         cuisines = [translate_to_russian(cuisine) for cuisine in recipe_data['cuisines']]
         translated['cuisines'] = cuisines
     
-    # Тип блюда (завтрак/обед/ужин)
+    # Тип блюда
     if recipe_data.get('dishTypes'):
-        translated['dishTypes'] = recipe_data['dishTypes']
+        dish_types = [translate_to_russian(dt) for dt in recipe_data['dishTypes']]
+        translated['dishTypes'] = dish_types
     
     # Изображение
     if recipe_data.get('image'):
         translated['image'] = recipe_data['image']
+    
+    # Дополнительная информация
+    if recipe_data.get('summary'):
+        summary = re.sub('<[^<]+?>', '', recipe_data['summary'])
+        translated['summary'] = translate_to_russian(summary)
+    
+    if recipe_data.get('healthScore'):
+        translated['healthScore'] = recipe_data['healthScore']
     
     return translated
 
@@ -459,7 +610,7 @@ async def handle_time(q, context, data):
         hour = int(parts[1])
         date = context.user_data["reminder_date"]
         
-        # Создаем datetime с выбранным часом и текущими минутами (00)
+        # Создаем datetime с выбранным часом
         reminder_datetime = datetime.combine(date, datetime.min.time().replace(hour=hour, minute=0))
         
         # Проверяем, что время не в прошлом
@@ -497,15 +648,11 @@ async def handle_time(q, context, data):
         now = datetime.now()
         date = context.user_data["reminder_date"]
         
-        # Используем текущее время, но округляем минуты до ближайших 5 минут вперед
-        current_hour = now.hour
-        current_minute = now.minute
-        
-        # Если выбрана сегодняшняя дата и текущее время, добавляем 5 минут
+        # Используем текущее время, но добавляем 5 минут для сегодняшней даты
         if date == now.date():
             reminder_datetime = now + timedelta(minutes=5)
         else:
-            reminder_datetime = datetime.combine(date, datetime.min.time().replace(hour=current_hour, minute=current_minute))
+            reminder_datetime = datetime.combine(date, datetime.min.time().replace(hour=now.hour, minute=now.minute))
         
         context.user_data["reminder_datetime"] = reminder_datetime
         
@@ -547,7 +694,6 @@ async def send_movie(q, context, mood=None, genre=None):
             
             # Добавляем жанр если указан
             if genre:
-                # Используем английское название жанра для поиска
                 search_params["s"] = f"movie {genre}"
             
             response = requests.get("http://www.omdbapi.com/", params=search_params, timeout=10)
@@ -720,7 +866,7 @@ async def send_recipe(q, context, meal_type=None):
             if tag:
                 url += f"&tags={tag}"
         
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=15)
         
         if response.status_code != 200:
             await q.message.reply_text("Ошибка при получении рецепта. Проверьте API ключ.")
@@ -748,39 +894,61 @@ async def send_recipe(q, context, meal_type=None):
         
         # Время приготовления
         if translated.get('readyInMinutes'):
-            text_parts.append(f"⏱️ Время приготовления: {translated['readyInMinutes']} минут")
+            text_parts.append(f"⏱️ *Время приготовления:* {translated['readyInMinutes']} минут")
         
         # Количество порций
         if translated.get('servings'):
-            text_parts.append(f"👥 Порций: {translated['servings']}")
+            text_parts.append(f"👥 *Порций:* {translated['servings']}")
         
         # Кухня
         if translated.get('cuisines') and translated['cuisines']:
             cuisines_text = ", ".join(translated['cuisines'])
-            text_parts.append(f"🍜 Кухня: {cuisines_text}")
+            text_parts.append(f"🍜 *Кухня:* {cuisines_text}")
+        
+        # Тип блюда
+        if translated.get('dishTypes') and translated['dishTypes']:
+            dish_types = ", ".join(translated['dishTypes'][:3])
+            text_parts.append(f"📋 *Тип блюда:* {dish_types}")
+        
+        # Польза для здоровья
+        if translated.get('healthScore'):
+            health_score = translated['healthScore']
+            if health_score > 70:
+                health_emoji = "💚"
+            elif health_score > 40:
+                health_emoji = "💛"
+            else:
+                health_emoji = "❤️"
+            text_parts.append(f"{health_emoji} *Полезность:* {health_score}/100")
         
         # Ингредиенты
         if translated.get('ingredients'):
             text_parts.append("\n🧾 *Ингредиенты:*")
-            # Берем первые 10 ингредиентов, если их много
-            ingredients = translated['ingredients'][:10]
+            # Показываем все ингредиенты
+            ingredients = translated['ingredients']
             text_parts.extend(ingredients)
-            if len(translated['ingredients']) > 10:
-                text_parts.append(f"... и еще {len(translated['ingredients']) - 10} ингредиентов")
+        
+        # Краткое описание
+        if translated.get('summary'):
+            summary = translated['summary']
+            if len(summary) > 200:
+                summary = summary[:200] + "..."
+            text_parts.append(f"\n📝 *Описание:*\n{summary}")
         
         # Инструкции
         if translated.get('instructions'):
             instructions = translated['instructions']
-            # Ограничиваем длину
-            if len(instructions) > 500:
-                instructions = instructions[:500] + "..."
             text_parts.append(f"\n📝 *Приготовление:*\n{instructions}")
         
         final_text = "\n".join(text_parts)
         
         # Отправляем фото если есть
         if translated.get('image'):
-            await q.message.reply_photo(translated['image'], caption=final_text, parse_mode='Markdown')
+            await q.message.reply_photo(
+                translated['image'], 
+                caption=final_text, 
+                parse_mode='Markdown'
+            )
         else:
             await q.message.reply_text(final_text, parse_mode='Markdown')
             
@@ -789,7 +957,7 @@ async def send_recipe(q, context, meal_type=None):
         await q.message.reply_text("Ошибка при получении рецепта. Проверьте подключение к интернету.")
     except Exception as e:
         logging.error(f"Неожиданная ошибка в send_recipe: {e}")
-        await q.message.reply_text("Произошла ошибка при поиске рецепта")
+        await q.message.reply_text(f"Произошла ошибка при поиске рецепта: {str(e)}")
 
 
 # ===== TEXT HANDLER =====
@@ -843,7 +1011,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Нельзя добавить пустой план")
 
     else:
-        # Если не в специальном режиме, просто игнорируем или показываем меню
+        # Если не в специальном режиме, просто показываем меню
         await update.message.reply_text(
             "Используйте кнопки меню для навигации",
             reply_markup=menu_kb()
