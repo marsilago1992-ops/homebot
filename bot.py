@@ -26,6 +26,18 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OMDB_KEY = os.getenv("OMDB_API_KEY")
 SPOON_KEY = os.getenv("SPOONACULAR_KEY")
+TARGET_TOPIC_ID = os.getenv("TARGET_TOPIC_ID")
+
+# Конвертируем в int, если значение есть
+if TARGET_TOPIC_ID:
+    try:
+        TARGET_TOPIC_ID = int(TARGET_TOPIC_ID)
+        logging.info(f"✅ Бот будет работать только в теме с ID: {TARGET_TOPIC_ID}")
+    except ValueError:
+        logging.error(f"❌ Неверный формат TARGET_TOPIC_ID: {TARGET_TOPIC_ID}")
+        TARGET_TOPIC_ID = None
+else:
+    logging.warning("⚠️ TARGET_TOPIC_ID не указан, бот будет работать во всех темах")
 
 if not TOKEN:
     raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
@@ -34,6 +46,30 @@ if not TOKEN:
 PRODUCTS = []
 REMINDERS = []
 HOME_PLANS = []
+
+# ===== ФУНКЦИЯ ПРОВЕРКИ ТЕМЫ =====
+def is_allowed_topic(update: Update) -> bool:
+    """Проверяет, что сообщение из разрешенной темы"""
+    # Если ID темы не указан, разрешаем все
+    if not TARGET_TOPIC_ID:
+        return True
+    
+    # Определяем тип обновления и получаем ID темы
+    topic_id = None
+    
+    if update.message:
+        topic_id = update.message.message_thread_id
+    elif update.callback_query and update.callback_query.message:
+        topic_id = update.callback_query.message.message_thread_id
+    elif update.edited_message:
+        topic_id = update.edited_message.message_thread_id
+    
+    # Если это личное сообщение (нет темы)
+    if topic_id is None:
+        return True  # Разрешаем личные сообщения
+    
+    # Проверяем соответствие ID темы
+    return topic_id == TARGET_TOPIC_ID
 
 # ===== UI =====
 def menu_kb():
@@ -47,6 +83,14 @@ def menu_kb():
 
 # ===== START =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем доступ к теме
+    if not is_allowed_topic(update):
+        await update.message.reply_text(
+            "❌ Этот бот работает только в специальной теме группы.\n"
+            "Пожалуйста, перейдите в правильную тему и попробуйте снова."
+        )
+        return
+    
     await update.message.reply_text("Семейный ассистент готов 👇", reply_markup=menu_kb())
 
 # ===== PRODUCTS =====
@@ -404,6 +448,14 @@ def get_meal_type_description(meal_type):
 
 # ===== BUTTONS =====
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем доступ к теме
+    if not is_allowed_topic(update):
+        await update.callback_query.answer(
+            "⛔ Бот работает только в специальной теме группы",
+            show_alert=True
+        )
+        return
+    
     q = update.callback_query
     await q.answer()
     data = q.data
@@ -815,7 +867,6 @@ async def send_recipe(q, context, meal_type=None):
         
         # Формируем ссылку на рецепт
         if recipe_id and recipe_title:
-            # Очищаем название для URL
             clean_title = re.sub(r'[^\w\s-]', '', recipe_title).strip().lower()
             clean_title = re.sub(r'[-\s]+', '-', clean_title)
             recipe_url = f"https://spoonacular.com/recipes/{clean_title}-{recipe_id}"
@@ -886,7 +937,6 @@ async def send_recipe(q, context, meal_type=None):
         
         # Проверяем длину текста
         if len(full_text) > 1024:
-            # Упрощенная версия
             simple_parts = []
             
             if meal_type:
@@ -917,7 +967,6 @@ async def send_recipe(q, context, meal_type=None):
             
             final_text = "\n".join(simple_parts)
             
-            # Если все еще длинный
             if len(final_text) > 1024:
                 short_text = f"{meal_header if meal_type else '🍳'} *{title}*\n"
                 if translated.get('readyInMinutes'):
@@ -948,6 +997,14 @@ async def send_recipe(q, context, meal_type=None):
 
 # ===== TEXT HANDLER =====
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем доступ к теме
+    if not is_allowed_topic(update):
+        await update.message.reply_text(
+            "❌ Этот бот работает только в специальной теме группы.\n"
+            "Пожалуйста, перейдите в правильную тему и попробуйте снова."
+        )
+        return
+    
     mode = context.user_data.get("mode")
     txt = update.message.text.strip()
 
@@ -1011,6 +1068,10 @@ def main():
     print(f"Токен: {TOKEN[:10]}...")
     print(f"OMDB ключ: {'✅' if OMDB_KEY else '❌'}")
     print(f"Spoonacular ключ: {'✅' if SPOON_KEY else '❌'}")
+    if TARGET_TOPIC_ID:
+        print(f"🎯 Бот ограничен темой ID: {TARGET_TOPIC_ID}")
+    else:
+        print("🌍 Бот работает во всех темах (не ограничен)")
     
     app.run_polling()
 
