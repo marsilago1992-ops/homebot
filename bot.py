@@ -27,6 +27,7 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OMDB_KEY = os.getenv("OMDB_API_KEY")
 SPOON_KEY = os.getenv("SPOONACULAR_KEY")
 TARGET_TOPIC_ID = os.getenv("TARGET_TOPIC_ID")
+AUTO_DELETE_TIME = int(os.getenv("AUTO_DELETE_TIME", "30"))  # Время в секундах до удаления (по умолчанию 30)
 
 # Конвертируем в int, если значение есть
 if TARGET_TOPIC_ID:
@@ -38,6 +39,8 @@ if TARGET_TOPIC_ID:
         TARGET_TOPIC_ID = None
 else:
     logging.warning("⚠️ TARGET_TOPIC_ID не указан, бот будет работать во всех темах")
+
+logging.info(f"⏰ Сообщения будут удаляться через {AUTO_DELETE_TIME} секунд")
 
 if not TOKEN:
     raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
@@ -71,6 +74,102 @@ def is_allowed_topic(update: Update) -> bool:
     # Проверяем соответствие ID темы
     return topic_id == TARGET_TOPIC_ID
 
+# ===== ФУНКЦИЯ АВТОУДАЛЕНИЯ =====
+async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE, message, delay: int = None):
+    """
+    Удаляет сообщение через указанную задержку
+    """
+    if delay is None:
+        delay = AUTO_DELETE_TIME
+    
+    if delay <= 0:
+        return  # Не удаляем если время <= 0
+    
+    try:
+        await asyncio.sleep(delay)
+        await message.delete()
+        logging.debug(f"Сообщение {message.message_id} удалено через {delay}с")
+    except Exception as e:
+        logging.error(f"Ошибка при удалении сообщения: {e}")
+
+async def send_temp_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, text: str, 
+                           reply_markup=None, parse_mode=None, topic_id: int = None, 
+                           delete_after: int = None):
+    """
+    Отправляет временное сообщение, которое будет удалено через указанное время
+    """
+    # Подготавливаем параметры отправки
+    send_params = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode
+    }
+    
+    if reply_markup:
+        send_params["reply_markup"] = reply_markup
+    
+    if topic_id:
+        send_params["message_thread_id"] = topic_id
+    
+    # Отправляем сообщение
+    if context.bot:
+        message = await context.bot.send_message(**send_params)
+        
+        # Устанавливаем автоудаление
+        if delete_after is None:
+            delete_after = AUTO_DELETE_TIME
+        
+        if delete_after > 0:
+            asyncio.create_task(delete_after_delay(context, message, delete_after))
+        
+        return message
+    return None
+
+async def reply_temp_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str,
+                            reply_markup=None, parse_mode=None, delete_after: int = None):
+    """
+    Отвечает временным сообщением, которое будет удалено через указанное время
+    """
+    # Определяем, откуда отвечать
+    if update.callback_query:
+        message = update.callback_query.message
+        chat_id = message.chat_id
+        topic_id = message.message_thread_id
+        reply_to = None
+    else:
+        message = update.message
+        chat_id = message.chat_id
+        topic_id = message.message_thread_id
+        reply_to = message.message_id
+    
+    # Подготавливаем параметры
+    send_params = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode
+    }
+    
+    if reply_markup:
+        send_params["reply_markup"] = reply_markup
+    
+    if topic_id:
+        send_params["message_thread_id"] = topic_id
+    
+    if reply_to:
+        send_params["reply_to_message_id"] = reply_to
+    
+    # Отправляем сообщение
+    sent_message = await context.bot.send_message(**send_params)
+    
+    # Устанавливаем автоудаление
+    if delete_after is None:
+        delete_after = AUTO_DELETE_TIME
+    
+    if delete_after > 0:
+        asyncio.create_task(delete_after_delay(context, sent_message, delete_after))
+    
+    return sent_message
+
 # ===== UI =====
 def menu_kb():
     return InlineKeyboardMarkup([
@@ -85,13 +184,15 @@ def menu_kb():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем доступ к теме
     if not is_allowed_topic(update):
-        await update.message.reply_text(
+        await reply_temp_message(update, context,
             "❌ Этот бот работает только в специальной теме группы.\n"
-            "Пожалуйста, перейдите в правильную тему и попробуйте снова."
+            "Пожалуйста, перейдите в правильную тему и попробуйте снова.",
+            delete_after=15
         )
         return
     
-    await update.message.reply_text("Семейный ассистент готов 👇", reply_markup=menu_kb())
+    await reply_temp_message(update, context, "Семейный ассистент готов 👇", 
+                            reply_markup=menu_kb(), delete_after=0)  # 0 = не удалять
 
 # ===== PRODUCTS =====
 def prod_kb():
@@ -461,53 +562,53 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
 
     if data == "back":
-        await q.message.reply_text("Меню:", reply_markup=menu_kb())
+        await reply_temp_message(update, context, "Меню:", reply_markup=menu_kb(), delete_after=0)
         return
 
     elif data == "prod":
-        await q.message.reply_text("Продукты:", reply_markup=prod_kb())
+        await reply_temp_message(update, context, "Продукты:", reply_markup=prod_kb(), delete_after=0)
         return
 
     elif data == "rem":
-        await q.message.reply_text("Напоминания:", reply_markup=rem_kb())
+        await reply_temp_message(update, context, "Напоминания:", reply_markup=rem_kb(), delete_after=0)
         return
 
     elif data == "film":
-        await q.message.reply_text("Фильмы:", reply_markup=film_kb())
+        await reply_temp_message(update, context, "Фильмы:", reply_markup=film_kb(), delete_after=0)
         return
 
     elif data == "cook":
-        await q.message.reply_text("🍳 Что приготовить?", reply_markup=cook_kb())
+        await reply_temp_message(update, context, "🍳 Что приготовить?", reply_markup=cook_kb(), delete_after=0)
         return
 
     elif data == "home":
-        await q.message.reply_text("Дом:", reply_markup=home_kb())
+        await reply_temp_message(update, context, "Дом:", reply_markup=home_kb(), delete_after=0)
         return
 
     elif data == "prod_add":
         context.user_data["mode"] = "PROD_ADD"
-        await q.message.reply_text("Напиши продукт одним сообщением")
+        await reply_temp_message(update, context, "Напиши продукт одним сообщением")
         return
 
     elif data == "prod_done":
         if not PRODUCTS:
-            await q.message.reply_text("Список пуст")
+            await reply_temp_message(update, context, "Список пуст")
         else:
             PRODUCTS.clear()
-            await q.message.reply_text("Список очищен")
+            await reply_temp_message(update, context, "Список очищен")
         return
 
     elif data == "prod_list":
         if not PRODUCTS:
-            await q.message.reply_text("Список пуст")
+            await reply_temp_message(update, context, "Список пуст")
         else:
             txt = "\n".join([f"• {p}" for p in PRODUCTS])
-            await q.message.reply_text(f"🛒 Продукты:\n{txt}")
+            await reply_temp_message(update, context, f"🛒 Продукты:\n{txt}")
         return
 
     elif data == "rem_create":
         context.user_data["mode"] = "REM_DATE"
-        await q.message.reply_text(
+        await q.message.edit_text(
             "Выберите дату для напоминания:",
             reply_markup=create_calendar_kb()
         )
@@ -523,59 +624,59 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "rem_list":
         if not REMINDERS:
-            await q.message.reply_text("Напоминаний нет")
+            await reply_temp_message(update, context, "Напоминаний нет")
         else:
             sorted_reminders = sorted(REMINDERS, key=lambda x: datetime.strptime(x.split(" — ")[0], "%Y-%m-%d %H:%M"))
             txt = "\n".join([f"• {r}" for r in sorted_reminders])
-            await q.message.reply_text(f"⏰ Напоминания:\n{txt}")
+            await reply_temp_message(update, context, f"⏰ Напоминания:\n{txt}")
         return
 
     elif data == "rem_del":
         REMINDERS.clear()
-        await q.message.reply_text("Все напоминания удалены")
+        await reply_temp_message(update, context, "Все напоминания удалены")
         return
 
     elif data == "home_add":
         context.user_data["mode"] = "HOME_ADD"
-        await q.message.reply_text("Напиши план по дому")
+        await reply_temp_message(update, context, "Напиши план по дому")
         return
 
     elif data == "home_list":
         if not HOME_PLANS:
-            await q.message.reply_text("Планов нет")
+            await reply_temp_message(update, context, "Планов нет")
         else:
             txt = "\n".join([f"• {h}" for h in HOME_PLANS])
-            await q.message.reply_text(f"🏠 Планы:\n{txt}")
+            await reply_temp_message(update, context, f"🏠 Планы:\n{txt}")
         return
 
     elif data == "home_edit":
-        await q.message.reply_text("Функция редактирования пока не реализована")
+        await reply_temp_message(update, context, "Функция редактирования пока не реализована")
         return
 
     elif data == "home_del":
         HOME_PLANS.clear()
-        await q.message.reply_text("Все планы удалены")
+        await reply_temp_message(update, context, "Все планы удалены")
         return
 
     elif data == "film_pick":
-        await send_movie(q, context)
+        await send_movie(update, context)
     elif data.startswith("film_mood:"):
         mood = data.split(":")[1]
-        await send_movie(q, context, mood=mood)
+        await send_movie(update, context, mood=mood)
     elif data.startswith("film_genre:"):
         genre = data.split(":")[1]
-        await send_movie(q, context, genre=genre)
+        await send_movie(update, context, genre=genre)
     elif data == "menu":
-        await q.message.reply_text("Меню:", reply_markup=menu_kb())
+        await reply_temp_message(update, context, "Меню:", reply_markup=menu_kb(), delete_after=0)
 
     elif data == "cook_pick":
-        await send_recipe(q, context, meal_type=None)
+        await send_recipe(update, context, meal_type=None)
     elif data == "cook_breakfast":
-        await send_recipe(q, context, meal_type="breakfast")
+        await send_recipe(update, context, meal_type="breakfast")
     elif data == "cook_lunch":
-        await send_recipe(q, context, meal_type="lunch")
+        await send_recipe(update, context, meal_type="lunch")
     elif data == "cook_dinner":
-        await send_recipe(q, context, meal_type="dinner")
+        await send_recipe(update, context, meal_type="dinner")
 
 async def handle_calendar(q, context, data):
     """Обработка нажатий на календарь"""
@@ -691,10 +792,17 @@ async def handle_time(q, context, data):
         context.user_data["mode"] = "REM_TEXT"
 
 # ===== MOVIE =====
-async def send_movie(q, context, mood=None, genre=None):
+async def send_movie(update: Update, context, mood=None, genre=None):
     if not OMDB_KEY:
-        await q.message.reply_text("OMDB API ключ не настроен")
+        await reply_temp_message(update, context, "OMDB API ключ не настроен")
         return
+    
+    # Получаем объект для ответа
+    if update.callback_query:
+        q = update.callback_query
+        message = q.message
+    else:
+        message = update.message
     
     try:
         for attempt in range(3):
@@ -767,19 +875,19 @@ async def send_movie(q, context, mood=None, genre=None):
                     
                     poster = detail.get("Poster")
                     if poster and poster != "N/A":
-                        await q.message.reply_photo(poster, caption=final_text, parse_mode='Markdown')
+                        await message.reply_photo(poster, caption=final_text, parse_mode='Markdown')
                     else:
-                        await q.message.reply_text(final_text, parse_mode='Markdown')
+                        await message.reply_text(final_text, parse_mode='Markdown')
                     return
         
-        await q.message.reply_text("Не удалось найти подходящий фильм. Попробуйте еще раз.")
+        await reply_temp_message(update, context, "Не удалось найти подходящий фильм. Попробуйте еще раз.")
         
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при запросе к OMDB API: {e}")
-        await q.message.reply_text("Ошибка при получении информации о фильме. Проверьте подключение к интернету.")
+        await reply_temp_message(update, context, "Ошибка при получении информации о фильме. Проверьте подключение к интернету.")
     except Exception as e:
         logging.error(f"Неожиданная ошибка в send_movie: {e}")
-        await q.message.reply_text("Произошла ошибка при поиске фильма")
+        await reply_temp_message(update, context, "Произошла ошибка при поиске фильма")
 
 def translate_movie_data(movie_data):
     """Переводит основные поля фильма на русский"""
@@ -832,10 +940,17 @@ def get_russian_genre(english_genre):
     return genres.get(english_genre, english_genre)
 
 # ===== RECIPE =====
-async def send_recipe(q, context, meal_type=None):
+async def send_recipe(update: Update, context, meal_type=None):
     if not SPOON_KEY:
-        await q.message.reply_text("Spoonacular API ключ не настроен")
+        await reply_temp_message(update, context, "Spoonacular API ключ не настроен")
         return
+    
+    # Получаем объект для ответа
+    if update.callback_query:
+        q = update.callback_query
+        message = q.message
+    else:
+        message = update.message
     
     try:
         url = f"https://api.spoonacular.com/recipes/random?apiKey={SPOON_KEY}&number=1"
@@ -853,12 +968,12 @@ async def send_recipe(q, context, meal_type=None):
         response = requests.get(url, timeout=15)
         
         if response.status_code != 200:
-            await q.message.reply_text("Ошибка при получении рецепта. Проверьте API ключ.")
+            await reply_temp_message(update, context, "Ошибка при получении рецепта. Проверьте API ключ.")
             return
             
         data = response.json()
         if not data.get("recipes"):
-            await q.message.reply_text("Не удалось найти рецепт")
+            await reply_temp_message(update, context, "Не удалось найти рецепт")
             return
             
         recipe = data["recipes"][0]
@@ -979,29 +1094,30 @@ async def send_recipe(q, context, meal_type=None):
             final_text = full_text
         
         if translated.get('image'):
-            await q.message.reply_photo(
+            await message.reply_photo(
                 translated['image'], 
                 caption=final_text, 
                 parse_mode='Markdown'
             )
         else:
-            await q.message.reply_text(final_text, parse_mode='Markdown')
+            await message.reply_text(final_text, parse_mode='Markdown')
             
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при запросе к Spoonacular API: {e}")
-        await q.message.reply_text("Ошибка при получении рецепта. Проверьте подключение к интернету.")
+        await reply_temp_message(update, context, "Ошибка при получении рецепта. Проверьте подключение к интернету.")
     except Exception as e:
         logging.error(f"Неожиданная ошибка в send_recipe: {e}")
-        await q.message.reply_text(f"Произошла ошибка при поиске рецепта: {str(e)}")
+        await reply_temp_message(update, context, f"Произошла ошибка при поиске рецепта: {str(e)}")
 
 
 # ===== TEXT HANDLER =====
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем доступ к теме
     if not is_allowed_topic(update):
-        await update.message.reply_text(
+        await reply_temp_message(update, context,
             "❌ Этот бот работает только в специальной теме группы.\n"
-            "Пожалуйста, перейдите в правильную тему и попробуйте снова."
+            "Пожалуйста, перейдите в правильную тему и попробуйте снова.",
+            delete_after=15
         )
         return
     
@@ -1012,16 +1128,16 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if txt:
             PRODUCTS.append(txt)
             context.user_data.clear()
-            await update.message.reply_text(f"✅ Продукт '{txt}' добавлен в список")
+            await reply_temp_message(update, context, f"✅ Продукт '{txt}' добавлен в список")
         else:
-            await update.message.reply_text("❌ Нельзя добавить пустой продукт")
+            await reply_temp_message(update, context, "❌ Нельзя добавить пустой продукт")
 
     elif mode == "REM_TEXT":
         if "reminder_datetime" in context.user_data:
             dt = context.user_data["reminder_datetime"]
             
             if dt < datetime.now():
-                await update.message.reply_text(
+                await reply_temp_message(update, context,
                     "❌ Нельзя создать напоминание на прошедшую дату.\n"
                     "Попробуйте снова через меню Напоминания."
                 )
@@ -1032,13 +1148,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             REMINDERS.append(reminder_text)
             REMINDERS.sort(key=lambda x: datetime.strptime(x.split(" — ")[0], "%Y-%m-%d %H:%M"))
 
-            await update.message.reply_text(
+            await reply_temp_message(update, context,
                 f"✅ Напоминание создано:\n"
                 f"📅 {dt.strftime('%Y-%m-%d %H:%M')}\n"
                 f"📝 {txt}"
             )
         else:
-            await update.message.reply_text("❌ Ошибка: не выбрана дата и время")
+            await reply_temp_message(update, context, "❌ Ошибка: не выбрана дата и время")
         
         context.user_data.clear()
 
@@ -1046,14 +1162,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if txt:
             HOME_PLANS.append(txt)
             context.user_data.clear()
-            await update.message.reply_text(f"✅ План '{txt}' добавлен")
+            await reply_temp_message(update, context, f"✅ План '{txt}' добавлен")
         else:
-            await update.message.reply_text("❌ Нельзя добавить пустой план")
+            await reply_temp_message(update, context, "❌ Нельзя добавить пустой план")
 
     else:
-        await update.message.reply_text(
+        await reply_temp_message(update, context,
             "Используйте кнопки меню для навигации",
-            reply_markup=menu_kb()
+            reply_markup=menu_kb(),
+            delete_after=0
         )
 
 
@@ -1072,6 +1189,7 @@ def main():
         print(f"🎯 Бот ограничен темой ID: {TARGET_TOPIC_ID}")
     else:
         print("🌍 Бот работает во всех темах (не ограничен)")
+    print(f"⏰ Автоудаление сообщений: {AUTO_DELETE_TIME} секунд")
     
     app.run_polling()
 
